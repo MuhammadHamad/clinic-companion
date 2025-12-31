@@ -1,102 +1,91 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '@/types';
+import { User, Session } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AuthContextType {
   user: User | null;
+  session: Session | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  logout: () => void;
+  signUp: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Demo users for testing
-const DEMO_USERS: Record<string, { password: string; user: User }> = {
-  'admin@clinic.com': {
-    password: 'admin123',
-    user: {
-      id: '1',
-      email: 'admin@clinic.com',
-      first_name: 'Admin',
-      last_name: 'User',
-      role: 'admin',
-      is_active: true,
-      created_at: new Date().toISOString(),
-    },
-  },
-  'dentist@clinic.com': {
-    password: 'dentist123',
-    user: {
-      id: '2',
-      email: 'dentist@clinic.com',
-      first_name: 'Dr. Sarah',
-      last_name: 'Ahmed',
-      role: 'dentist',
-      is_active: true,
-      created_at: new Date().toISOString(),
-    },
-  },
-  'receptionist@clinic.com': {
-    password: 'reception123',
-    user: {
-      id: '3',
-      email: 'receptionist@clinic.com',
-      first_name: 'Ali',
-      last_name: 'Hassan',
-      role: 'receptionist',
-      is_active: true,
-      created_at: new Date().toISOString(),
-    },
-  },
-};
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for stored auth on mount
-    const storedUser = localStorage.getItem('dental_clinic_user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (e) {
-        localStorage.removeItem('dental_clinic_user');
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setIsLoading(false);
       }
-    }
-    setIsLoading(false);
+    );
+
+    // THEN check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, password: string) => {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500));
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-    const demoUser = DEMO_USERS[email.toLowerCase()];
-    
-    if (!demoUser) {
-      return { success: false, error: 'Invalid email or password' };
+    if (error) {
+      return { success: false, error: error.message };
     }
 
-    if (demoUser.password !== password) {
-      return { success: false, error: 'Invalid email or password' };
-    }
-
-    setUser(demoUser.user);
-    localStorage.setItem('dental_clinic_user', JSON.stringify(demoUser.user));
-    localStorage.setItem('dental_clinic_token', 'demo_jwt_token');
-    
     return { success: true };
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('dental_clinic_user');
-    localStorage.removeItem('dental_clinic_token');
+  const signUp = async (email: string, password: string) => {
+    const redirectUrl = `${window.location.origin}/`;
+    
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: redirectUrl,
+      },
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout }}>
+    <AuthContext.Provider 
+      value={{ 
+        user, 
+        session,
+        isAuthenticated: !!session, 
+        isLoading, 
+        login, 
+        signUp,
+        logout 
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

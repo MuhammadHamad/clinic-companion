@@ -11,8 +11,9 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   
-  const { login } = useAuth();
+  const { login, signUp } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
@@ -31,20 +32,38 @@ export default function Login() {
       return;
     }
 
+    if (password.length < 6) {
+      toast({
+        title: 'Error',
+        description: 'Password must be at least 6 characters',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsLoading(true);
     
     try {
-      const result = await login(email, password);
+      const result = isSignUp 
+        ? await signUp(email, password)
+        : await login(email, password);
       
       if (result.success) {
-        toast({
-          title: 'Welcome back!',
-          description: 'You have successfully logged in',
-        });
-        navigate(from, { replace: true });
+        if (isSignUp) {
+          toast({
+            title: 'Account created!',
+            description: 'Please check your email to verify your account.',
+          });
+        } else {
+          toast({
+            title: 'Welcome back!',
+            description: 'You have successfully logged in',
+          });
+          navigate(from, { replace: true });
+        }
       } else {
         toast({
-          title: 'Login failed',
+          title: isSignUp ? 'Sign up failed' : 'Login failed',
           description: result.error || 'Invalid credentials',
           variant: 'destructive',
         });
@@ -120,9 +139,11 @@ export default function Login() {
           </div>
 
           <div className="text-center lg:text-left">
-            <h2 className="text-2xl font-display font-bold text-foreground">Welcome back</h2>
+            <h2 className="text-2xl font-display font-bold text-foreground">
+              {isSignUp ? 'Create an account' : 'Welcome back'}
+            </h2>
             <p className="mt-2 text-muted-foreground">
-              Sign in to your account to continue
+              {isSignUp ? 'Sign up to get started' : 'Sign in to your account to continue'}
             </p>
           </div>
 
@@ -136,7 +157,7 @@ export default function Login() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="admin@clinic.com"
+                  placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="pl-10"
@@ -174,21 +195,22 @@ export default function Login() {
               {isLoading ? (
                 <div className="flex items-center gap-2">
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                  <span>Signing in...</span>
+                  <span>{isSignUp ? 'Creating account...' : 'Signing in...'}</span>
                 </div>
               ) : (
-                'Sign in'
+                isSignUp ? 'Create account' : 'Sign in'
               )}
             </Button>
           </form>
 
-          <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-            <p className="text-sm font-medium text-foreground">Demo Credentials:</p>
-            <div className="text-sm text-muted-foreground space-y-1">
-              <p><span className="font-medium">Admin:</span> admin@clinic.com / admin123</p>
-              <p><span className="font-medium">Dentist:</span> dentist@clinic.com / dentist123</p>
-              <p><span className="font-medium">Receptionist:</span> receptionist@clinic.com / reception123</p>
-            </div>
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+            </button>
           </div>
         </div>
       </div>
