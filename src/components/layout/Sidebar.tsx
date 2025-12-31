@@ -11,14 +11,22 @@ import {
   Stethoscope,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useUserRole, AppRole } from '@/hooks/useUserRole';
 
-const navigation = [
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ElementType;
+  allowedRoles?: AppRole[];
+}
+
+const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Patients', href: '/patients', icon: Users },
   { name: 'Appointments', href: '/appointments', icon: Calendar },
-  { name: 'Invoices', href: '/invoices', icon: FileText },
-  { name: 'Inventory', href: '/inventory', icon: Package },
-  { name: 'Reports', href: '/reports', icon: BarChart3 },
+  { name: 'Invoices', href: '/invoices', icon: FileText, allowedRoles: ['admin', 'receptionist'] },
+  { name: 'Inventory', href: '/inventory', icon: Package, allowedRoles: ['admin'] },
+  { name: 'Reports', href: '/reports', icon: BarChart3, allowedRoles: ['admin', 'dentist'] },
 ];
 
 interface SidebarProps {
@@ -28,6 +36,15 @@ interface SidebarProps {
 
 export function Sidebar({ onLogout, user }: SidebarProps) {
   const location = useLocation();
+
+  const { role, canAccessSettings, isLoading: isRoleLoading } = useUserRole();
+
+  // Filter navigation based on user role
+  const filteredNavigation = navigation.filter((item) => {
+    if (!item.allowedRoles) return true;
+    if (!role) return false;
+    return item.allowedRoles.includes(role);
+  });
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar border-r border-sidebar-border">
@@ -45,7 +62,7 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 px-3 py-4">
-          {navigation.map((item) => {
+          {filteredNavigation.map((item) => {
             const isActive = location.pathname === item.href || 
               (item.href !== '/' && location.pathname.startsWith(item.href));
             return (
@@ -75,23 +92,29 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
                 {user?.first_name || 'Admin'} {user?.last_name || 'User'}
               </p>
               <p className="text-xs text-sidebar-muted capitalize">
-                {user?.role || 'admin'}
+                {role || user?.role || 'User'}
               </p>
             </div>
           </div>
           <div className="flex gap-2">
-            <Link
-              to="/settings"
-              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors"
-            >
-              <Settings className="h-4 w-4" />
-              <span>Settings</span>
-            </Link>
+            {canAccessSettings && (
+              <Link
+                to="/settings"
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors"
+              >
+                <Settings className="h-4 w-4" />
+                <span>Settings</span>
+              </Link>
+            )}
             <button
               onClick={onLogout}
-              className="flex items-center justify-center px-3 py-2 text-sm text-sidebar-muted hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+              className={cn(
+                "flex items-center justify-center px-3 py-2 text-sm text-sidebar-muted hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors",
+                !canAccessSettings && "flex-1 gap-2"
+              )}
             >
               <LogOut className="h-4 w-4" />
+              {!canAccessSettings && <span>Logout</span>}
             </button>
           </div>
         </div>
