@@ -142,7 +142,8 @@ export default function Settings() {
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-6">
                   <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center text-primary text-2xl font-bold">
-                    {user?.first_name?.[0]}{user?.last_name?.[0]}
+                    {(user?.user_metadata?.first_name?.[0] || user?.email?.[0] || 'U').toUpperCase()}
+                    {(user?.user_metadata?.last_name?.[0] || '').toUpperCase()}
                   </div>
                   <div>
                     <Button variant="outline">Change Photo</Button>
@@ -152,11 +153,11 @@ export default function Settings() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="form-label">First Name</label>
-                    <Input defaultValue={user?.first_name || ''} />
+                    <Input defaultValue={user?.user_metadata?.first_name || ''} />
                   </div>
                   <div>
                     <label className="form-label">Last Name</label>
-                    <Input defaultValue={user?.last_name || ''} />
+                    <Input defaultValue={user?.user_metadata?.last_name || ''} />
                   </div>
                   <div>
                     <label className="form-label">Email</label>
@@ -164,7 +165,7 @@ export default function Settings() {
                   </div>
                   <div>
                     <label className="form-label">Phone</label>
-                    <Input defaultValue={user?.phone || ''} />
+                    <Input defaultValue={user?.user_metadata?.phone || ''} />
                   </div>
                 </div>
               </CardContent>
