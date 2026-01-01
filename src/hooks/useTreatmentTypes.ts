@@ -1,0 +1,80 @@
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { TreatmentType } from '@/types';
+import { useToast } from '@/hooks/use-toast';
+
+export function useTreatmentTypes() {
+  const [treatmentTypes, setTreatmentTypes] = useState<TreatmentType[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchTreatmentTypes = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('treatment_types')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) throw error;
+
+      const mappedTypes: TreatmentType[] = (data || []).map((t) => ({
+        id: t.id,
+        name: t.name,
+        code: t.code,
+        default_price: Number(t.default_price),
+        duration_minutes: t.duration_minutes,
+        category: t.category,
+        is_active: t.is_active,
+      }));
+
+      setTreatmentTypes(mappedTypes);
+    } catch (error: any) {
+      console.error('Error fetching treatment types:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch treatment types',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
+
+  const createTreatmentType = async (typeData: Omit<TreatmentType, 'id'>) => {
+    try {
+      const { data, error } = await supabase
+        .from('treatment_types')
+        .insert({
+          name: typeData.name,
+          code: typeData.code || null,
+          default_price: typeData.default_price,
+          duration_minutes: typeData.duration_minutes,
+          category: typeData.category || null,
+          is_active: typeData.is_active ?? true,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      await fetchTreatmentTypes();
+      return { success: true, data };
+    } catch (error: any) {
+      console.error('Error creating treatment type:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  useEffect(() => {
+    fetchTreatmentTypes();
+  }, [fetchTreatmentTypes]);
+
+  return {
+    treatmentTypes,
+    isLoading,
+    fetchTreatmentTypes,
+    createTreatmentType,
+  };
+}

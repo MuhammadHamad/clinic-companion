@@ -25,16 +25,19 @@ import {
   ChevronLeft, 
   ChevronRight,
   Clock,
-  User,
   Calendar as CalendarIcon,
   Check,
   X,
   AlertCircle,
+  Loader2,
 } from 'lucide-react';
-import { mockAppointments, mockPatients, mockTreatmentTypes } from '@/data/mockData';
+import { useAppointments } from '@/hooks/useAppointments';
+import { usePatients } from '@/hooks/usePatients';
+import { useTreatmentTypes } from '@/hooks/useTreatmentTypes';
 import { Appointment, AppointmentStatus, AppointmentType } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const timeSlots = [
   '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
@@ -67,11 +70,14 @@ const durationOptions = [
 ];
 
 export default function Appointments() {
-  const [appointments, setAppointments] = useState<Appointment[]>(mockAppointments);
+  const { appointments, isLoading, createAppointment, updateAppointmentStatus } = useAppointments();
+  const { patients } = usePatients();
+  const { treatmentTypes } = useTreatmentTypes();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -134,7 +140,7 @@ export default function Appointments() {
     setIsDetailOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.patient_id || !formData.appointment_date || !formData.start_time || !formData.appointment_type) {
@@ -146,7 +152,6 @@ export default function Appointments() {
       return;
     }
 
-    // Check for conflicts
     const endTime = addMinutes(formData.start_time, parseInt(formData.duration));
     const hasConflict = appointments.some(a => {
       if (a.appointment_date !== formData.appointment_date) return false;
@@ -166,56 +171,68 @@ export default function Appointments() {
       return;
     }
 
-    const patient = mockPatients.find(p => p.id === formData.patient_id);
-    
-    const newAppointment: Appointment = {
-      id: String(Date.now()),
+    setIsSubmitting(true);
+    const result = await createAppointment({
       patient_id: formData.patient_id,
-      dentist_id: '2',
       appointment_date: formData.appointment_date,
       start_time: formData.start_time,
       end_time: endTime,
       appointment_type: formData.appointment_type as AppointmentType,
-      status: 'scheduled',
       reason_for_visit: formData.reason_for_visit,
       notes: formData.notes,
-      created_at: new Date().toISOString(),
-      patient,
-    };
-
-    setAppointments([...appointments, newAppointment]);
-    setIsFormOpen(false);
-    toast({
-      title: 'Appointment Created',
-      description: `Appointment scheduled for ${patient?.first_name} ${patient?.last_name}`,
     });
+
+    if (result.success) {
+      const patient = patients.find(p => p.id === formData.patient_id);
+      setIsFormOpen(false);
+      toast({
+        title: 'Appointment Created',
+        description: `Appointment scheduled for ${patient?.first_name} ${patient?.last_name}`,
+      });
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error || 'Failed to create appointment',
+        variant: 'destructive',
+      });
+    }
+    setIsSubmitting(false);
   };
 
-  const updateAppointmentStatus = (id: string, status: AppointmentStatus) => {
-    setAppointments(appointments.map(a => 
-      a.id === id ? { ...a, status } : a
-    ));
+  const handleStatusUpdate = async (id: string, status: AppointmentStatus) => {
+    const result = await updateAppointmentStatus(id, status);
     setIsDetailOpen(false);
-    toast({
-      title: 'Status Updated',
-      description: `Appointment marked as ${status.replace('_', ' ')}`,
-    });
+    if (result.success) {
+      toast({
+        title: 'Status Updated',
+        description: `Appointment marked as ${status.replace('_', ' ')}`,
+      });
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen">
+        <Header title="Appointments" subtitle="Manage your daily appointments" />
+        <div className="p-6 space-y-6">
+          <Skeleton className="h-10 w-full max-w-md" />
+          <Skeleton className="h-96 w-full" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
       <Header title="Appointments" subtitle="Manage your daily appointments" />
       
       <div className="p-6 space-y-6 animate-fade-in">
-        {/* Date Navigation */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button variant="outline" size="icon" onClick={() => navigateDate('prev')}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button variant="outline" onClick={goToToday}>
-              Today
-            </Button>
+            <Button variant="outline" onClick={goToToday}>Today</Button>
             <Button variant="outline" size="icon" onClick={() => navigateDate('next')}>
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -227,7 +244,6 @@ export default function Appointments() {
           </Button>
         </div>
 
-        {/* Calendar Grid */}
         <Card>
           <CardContent className="p-0">
             <div className="divide-y divide-border">
@@ -256,7 +272,6 @@ export default function Appointments() {
                                 {appointment.appointment_type} • {appointment.start_time} - {appointment.end_time}
                               </p>
                             </div>
-                            <div className="h-2 w-2 rounded-full bg-white/50" />
                           </div>
                         </button>
                       ) : (
@@ -281,7 +296,6 @@ export default function Appointments() {
           </CardContent>
         </Card>
 
-        {/* Stats */}
         <div className="flex gap-4">
           <div className="flex items-center gap-2 text-sm">
             <div className="h-3 w-3 rounded-full bg-status-scheduled" />
@@ -295,14 +309,9 @@ export default function Appointments() {
             <div className="h-3 w-3 rounded-full bg-status-completed" />
             <span>Completed ({todayAppointments.filter(a => a.status === 'completed').length})</span>
           </div>
-          <div className="flex items-center gap-2 text-sm">
-            <div className="h-3 w-3 rounded-full bg-status-cancelled" />
-            <span>Cancelled ({todayAppointments.filter(a => a.status === 'cancelled').length})</span>
-          </div>
         </div>
       </div>
 
-      {/* New Appointment Dialog */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -318,7 +327,7 @@ export default function Appointments() {
                   <SelectValue placeholder="Select a patient" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockPatients.filter(p => p.status === 'active').map(patient => (
+                  {patients.filter(p => p.status === 'active').map(patient => (
                     <SelectItem key={patient.id} value={patient.id}>
                       {patient.first_name} {patient.last_name} ({patient.patient_number})
                     </SelectItem>
@@ -373,7 +382,7 @@ export default function Appointments() {
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockTreatmentTypes.map(type => (
+                    {treatmentTypes.map(type => (
                       <SelectItem key={type.id} value={type.name}>{type.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -391,27 +400,19 @@ export default function Appointments() {
               />
             </div>
 
-            <div>
-              <label className="form-label">Notes</label>
-              <Textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                placeholder="Additional notes"
-                rows={2}
-              />
-            </div>
-
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Schedule Appointment</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Schedule Appointment
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Appointment Detail Dialog */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -457,42 +458,20 @@ export default function Appointments() {
               </div>
 
               {selectedAppointment.status !== 'completed' && selectedAppointment.status !== 'cancelled' && (
-                <div className="flex gap-2">
-                  <Button 
-                    className="flex-1" 
-                    variant="outline"
-                    onClick={() => updateAppointmentStatus(selectedAppointment.id, 'confirmed')}
-                    disabled={selectedAppointment.status === 'confirmed'}
-                  >
-                    <Check className="h-4 w-4 mr-2" />
-                    Confirm
+                <div className="flex gap-2 pt-2">
+                  <Button size="sm" variant="outline" className="flex-1" onClick={() => handleStatusUpdate(selectedAppointment.id, 'confirmed')}>
+                    <Check className="h-4 w-4 mr-1" /> Confirm
                   </Button>
-                  <Button 
-                    className="flex-1"
-                    onClick={() => updateAppointmentStatus(selectedAppointment.id, 'completed')}
-                  >
-                    <Check className="h-4 w-4 mr-2" />
-                    Complete
+                  <Button size="sm" variant="default" className="flex-1" onClick={() => handleStatusUpdate(selectedAppointment.id, 'completed')}>
+                    <Check className="h-4 w-4 mr-1" /> Complete
                   </Button>
-                  <Button 
-                    variant="destructive"
-                    size="icon"
-                    onClick={() => updateAppointmentStatus(selectedAppointment.id, 'cancelled')}
-                  >
+                  <Button size="sm" variant="destructive" onClick={() => handleStatusUpdate(selectedAppointment.id, 'cancelled')}>
                     <X className="h-4 w-4" />
                   </Button>
+                  <Button size="sm" variant="secondary" onClick={() => handleStatusUpdate(selectedAppointment.id, 'no_show')}>
+                    <AlertCircle className="h-4 w-4" />
+                  </Button>
                 </div>
-              )}
-
-              {selectedAppointment.status !== 'completed' && selectedAppointment.status !== 'cancelled' && (
-                <Button 
-                  variant="ghost" 
-                  className="w-full text-muted-foreground"
-                  onClick={() => updateAppointmentStatus(selectedAppointment.id, 'no_show')}
-                >
-                  <AlertCircle className="h-4 w-4 mr-2" />
-                  Mark as No-Show
-                </Button>
               )}
             </div>
           )}

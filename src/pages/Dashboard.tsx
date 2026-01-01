@@ -14,8 +14,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { getDashboardStats, getRevenueChartData, mockAppointments } from '@/data/mockData';
+import { useDashboard } from '@/hooks/useDashboard';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const statusColors: Record<string, string> = {
   scheduled: 'bg-status-scheduled/10 text-status-scheduled border-status-scheduled/20',
@@ -26,11 +27,26 @@ const statusColors: Record<string, string> = {
 };
 
 export default function Dashboard() {
-  const stats = getDashboardStats();
-  const chartData = getRevenueChartData();
-  const todayAppointments = mockAppointments
-    .filter(a => a.appointment_date === new Date().toISOString().split('T')[0])
-    .slice(0, 5);
+  const { stats, todayAppointments, revenueData, isLoading } = useDashboard();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen">
+        <Header title="Dashboard" subtitle="Welcome back! Here's what's happening today." />
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <Card key={i}>
+                <CardContent className="p-6">
+                  <Skeleton className="h-20 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
@@ -52,9 +68,9 @@ export default function Dashboard() {
                   <DollarSign className="h-5 w-5 text-primary" />
                 </div>
               </div>
-              <div className="mt-4 flex items-center gap-1 text-sm text-success">
+              <div className="mt-4 flex items-center gap-1 text-sm text-muted-foreground">
                 <TrendingUp className="h-4 w-4" />
-                <span>+12% from yesterday</span>
+                <span>From payments today</span>
               </div>
             </CardContent>
           </Card>
@@ -171,7 +187,7 @@ export default function Dashboard() {
             <CardContent>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData}>
+                  <BarChart data={revenueData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                     <XAxis 
                       dataKey="day" 
@@ -221,7 +237,7 @@ export default function Dashboard() {
                     <p>No appointments scheduled for today</p>
                   </div>
                 ) : (
-                  todayAppointments.map((appointment) => (
+                  todayAppointments.slice(0, 5).map((appointment) => (
                     <div
                       key={appointment.id}
                       className="flex items-center gap-4 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"

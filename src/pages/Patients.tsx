@@ -39,23 +39,25 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from 'lucide-react';
-import { mockPatients } from '@/data/mockData';
+import { usePatients } from '@/hooks/usePatients';
 import { Patient } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Patients() {
-  const [patients, setPatients] = useState<Patient[]>(mockPatients);
+  const { patients, isLoading, createPatient, updatePatient } = usePatients();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
-  // Form state
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -145,7 +147,7 @@ export default function Patients() {
     setIsViewOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.first_name || !formData.last_name || !formData.phone) {
@@ -157,36 +159,71 @@ export default function Patients() {
       return;
     }
 
+    setIsSubmitting(true);
+
     if (formMode === 'create') {
-      const newPatient: Patient = {
-        id: String(Date.now()),
-        patient_number: `P-${String(patients.length + 1).padStart(3, '0')}`,
+      const result = await createPatient({
         ...formData,
         gender: formData.gender as 'male' | 'female' | 'other' | undefined,
-        registration_date: new Date().toISOString().split('T')[0],
         status: 'active',
-        created_at: new Date().toISOString(),
         balance: 0,
-      };
-      setPatients([newPatient, ...patients]);
-      toast({
-        title: 'Patient Created',
-        description: `${formData.first_name} ${formData.last_name} has been registered successfully`,
       });
+
+      if (result.success) {
+        toast({
+          title: 'Patient Created',
+          description: `${formData.first_name} ${formData.last_name} has been registered successfully`,
+        });
+        setIsFormOpen(false);
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'Failed to create patient',
+          variant: 'destructive',
+        });
+      }
     } else if (selectedPatient) {
-      setPatients(patients.map(p => 
-        p.id === selectedPatient.id 
-          ? { ...p, ...formData, gender: formData.gender as 'male' | 'female' | 'other' | undefined }
-          : p
-      ));
-      toast({
-        title: 'Patient Updated',
-        description: 'Patient information has been updated successfully',
+      const result = await updatePatient(selectedPatient.id, {
+        ...formData,
+        gender: formData.gender as 'male' | 'female' | 'other' | undefined,
       });
+
+      if (result.success) {
+        toast({
+          title: 'Patient Updated',
+          description: 'Patient information has been updated successfully',
+        });
+        setIsFormOpen(false);
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'Failed to update patient',
+          variant: 'destructive',
+        });
+      }
     }
 
-    setIsFormOpen(false);
+    setIsSubmitting(false);
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen">
+        <Header title="Patients" subtitle="Manage your patient records" />
+        <div className="p-6 space-y-6">
+          <div className="flex gap-4 justify-between">
+            <Skeleton className="h-10 w-80" />
+            <Skeleton className="h-10 w-32" />
+          </div>
+          <div className="bg-card rounded-xl border border-border p-4 space-y-4">
+            {[...Array(5)].map((_, i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
@@ -476,7 +513,8 @@ export default function Patients() {
               <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 {formMode === 'create' ? 'Register Patient' : 'Save Changes'}
               </Button>
             </DialogFooter>
@@ -494,34 +532,34 @@ export default function Patients() {
           {selectedPatient && (
             <div className="space-y-6">
               <div className="flex items-center gap-4">
-                <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xl font-bold">
+                <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xl">
                   {selectedPatient.first_name[0]}{selectedPatient.last_name[0]}
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold">{selectedPatient.first_name} {selectedPatient.last_name}</h3>
                   <p className="text-sm text-muted-foreground">{selectedPatient.patient_number}</p>
+                  <Badge variant={selectedPatient.status === 'active' ? 'default' : 'secondary'} className="mt-1">
+                    {selectedPatient.status}
+                  </Badge>
                 </div>
-                <Badge className="ml-auto" variant={selectedPatient.status === 'active' ? 'default' : 'secondary'}>
-                  {selectedPatient.status}
-                </Badge>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="flex items-center gap-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center gap-2 text-sm">
                   <Phone className="h-4 w-4 text-muted-foreground" />
                   <span>{selectedPatient.phone}</span>
                 </div>
                 {selectedPatient.email && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 text-sm">
                     <Mail className="h-4 w-4 text-muted-foreground" />
                     <span>{selectedPatient.email}</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 text-sm">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span>Age: {calculateAge(selectedPatient.date_of_birth)}</span>
+                  <span>Registered: {selectedPatient.registration_date}</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 text-sm">
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
                   <span className={selectedPatient.balance && selectedPatient.balance > 0 ? 'text-destructive' : ''}>
                     Balance: Rs. {(selectedPatient.balance || 0).toLocaleString()}
@@ -529,23 +567,36 @@ export default function Patients() {
                 </div>
               </div>
 
-              {selectedPatient.allergies && (
-                <div className="p-3 bg-destructive/10 rounded-lg">
-                  <p className="text-sm font-medium text-destructive">Allergies</p>
-                  <p className="text-sm mt-1">{selectedPatient.allergies}</p>
+              {(selectedPatient.allergies || selectedPatient.medical_conditions) && (
+                <div className="p-4 bg-muted/50 rounded-lg space-y-2">
+                  <h4 className="font-medium text-sm">Medical Info</h4>
+                  {selectedPatient.allergies && (
+                    <div className="text-sm">
+                      <span className="text-destructive font-medium">Allergies: </span>
+                      {selectedPatient.allergies}
+                    </div>
+                  )}
+                  {selectedPatient.medical_conditions && (
+                    <div className="text-sm">
+                      <span className="font-medium">Conditions: </span>
+                      {selectedPatient.medical_conditions}
+                    </div>
+                  )}
                 </div>
               )}
 
-              <div className="flex gap-2">
-                <Button className="flex-1" onClick={() => { setIsViewOpen(false); openEditForm(selectedPatient); }}>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsViewOpen(false)}>
+                  Close
+                </Button>
+                <Button onClick={() => {
+                  setIsViewOpen(false);
+                  openEditForm(selectedPatient);
+                }}>
                   <Pencil className="h-4 w-4 mr-2" />
-                  Edit
+                  Edit Patient
                 </Button>
-                <Button variant="outline" className="flex-1">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Book Appointment
-                </Button>
-              </div>
+              </DialogFooter>
             </div>
           )}
         </DialogContent>
