@@ -6,28 +6,28 @@
 
 @layer base {
   :root {
-    --background: 210 20% 98%;
-    --foreground: 220 20% 10%;
+    --background: 222 22% 11%;
+    --foreground: 210 40% 98%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 220 20% 10%;
+    --card: 222 20% 15%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 10%;
+    --popover: 222 20% 15%;
+    --popover-foreground: 210 40% 98%;
 
     --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 220 20% 20%;
+    --secondary: 222 18% 18%;
+    --secondary-foreground: 210 30% 96%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 10% 46%;
+    --muted: 220 16% 20%;
+    --muted-foreground: 220 10% 60%;
 
-    --accent: 220 14% 96%;
-    --accent-foreground: 220 20% 20%;
+    --accent: 217 65% 35%;
+    --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
 
     --success: 160 84% 39%;
@@ -36,41 +36,41 @@
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
+    --border: 220 18% 22%;
+    --input: 220 18% 22%;
     --ring: 217 91% 60%;
 
     --radius: 0.5rem;
 
-    --sidebar-background: 220 20% 14%;
+    --sidebar-background: 220 25% 8%;
     --sidebar-foreground: 220 10% 90%;
     --sidebar-primary: 217 91% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 15% 20%;
+    --sidebar-accent: 220 20% 14%;
     --sidebar-accent-foreground: 220 10% 90%;
-    --sidebar-border: 220 15% 22%;
+    --sidebar-border: 220 20% 18%;
     --sidebar-ring: 217 91% 60%;
-    --sidebar-muted: 220 10% 50%;
+    --sidebar-muted: 220 10% 60%;
 
     /* Chart colors */
     --chart-1: 217 91% 60%;
     --chart-2: 160 84% 39%;
-    --chart-3: 38 92% 50%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --chart-3: 38 92% 55%;
+    --chart-4: 280 65% 62%;
+    --chart-5: 340 80% 60%;
 
     /* Status colors */
     --status-scheduled: 217 91% 60%;
-    --status-confirmed: 199 89% 48%;
-    --status-completed: 160 84% 39%;
-    --status-cancelled: 0 84% 60%;
-    --status-no-show: 220 10% 46%;
+    --status-confirmed: 199 89% 56%;
+    --status-completed: 160 84% 42%;
+    --status-cancelled: 0 84% 62%;
+    --status-no-show: 220 10% 55%;
 
     /* Financial */
-    --paid: 160 84% 39%;
-    --partial: 38 92% 50%;
-    --unpaid: 0 84% 60%;
-    --overdue: 0 84% 45%;
+    --paid: 160 84% 42%;
+    --partial: 38 92% 54%;
+    --unpaid: 0 84% 62%;
+    --overdue: 0 84% 48%;
   }
 
   .dark {

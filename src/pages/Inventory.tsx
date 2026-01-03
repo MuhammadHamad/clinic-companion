@@ -28,6 +28,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
   Plus, 
   Search, 
@@ -38,9 +48,11 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   RefreshCw,
+  Trash2,
+  List,
 } from 'lucide-react';
-import { mockInventoryItems, mockInventoryCategories } from '@/data/mockData';
-import { InventoryItem, InventoryStatus, MovementType } from '@/types';
+import { useInventory } from '@/hooks/useInventory';
+import { InventoryItem, InventoryCategory, InventoryStatus, MovementType } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -57,7 +69,7 @@ const statusLabels: Record<InventoryStatus, string> = {
 };
 
 export default function Inventory() {
-  const [items, setItems] = useState<InventoryItem[]>(mockInventoryItems);
+  const { items, categories, isLoading, fetchItems, createItem, updateItem, recordMovement, deleteItem, createCategory, updateCategory, deleteCategory } = useInventory();
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -66,6 +78,22 @@ export default function Inventory() {
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const { toast } = useToast();
+
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Category management state
+  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryDescription, setNewCategoryDescription] = useState('');
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  
+  // Category edit/delete state
+  const [editingCategory, setEditingCategory] = useState<InventoryCategory | null>(null);
+  const [isDeleteCategoryOpen, setIsDeleteCategoryOpen] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<InventoryCategory | null>(null);
+  const [isDeletingCategory, setIsDeletingCategory] = useState(false);
 
   const [formData, setFormData] = useState({
     item_name: '',
@@ -157,7 +185,7 @@ export default function Inventory() {
     return 'in_stock';
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.item_name || !formData.unit_of_measure || !formData.category_id) {
@@ -169,38 +197,162 @@ export default function Inventory() {
       return;
     }
 
-    const status = getStatus(formData.current_quantity, formData.minimum_threshold);
-    const category = mockInventoryCategories.find(c => c.id === formData.category_id);
+    const result = formMode === 'create' 
+      ? await createItem(formData)
+      : await updateItem(selectedItem!.id, formData);
 
-    if (formMode === 'create') {
-      const newItem: InventoryItem = {
-        id: String(Date.now()),
-        ...formData,
-        status,
-        created_at: new Date().toISOString(),
-        category,
-      };
-      setItems([newItem, ...items]);
+    if (result.success) {
+      setIsFormOpen(false);
       toast({
-        title: 'Item Added',
-        description: `${formData.item_name} has been added to inventory`,
+        title: formMode === 'create' ? 'Item Added' : 'Item Updated',
+        description: formMode === 'create' 
+          ? `${formData.item_name} has been added to inventory`
+          : 'Inventory item has been updated successfully',
       });
-    } else if (selectedItem) {
-      setItems(items.map(i => 
-        i.id === selectedItem.id 
-          ? { ...i, ...formData, status, category }
-          : i
-      ));
+    } else {
       toast({
-        title: 'Item Updated',
-        description: 'Inventory item has been updated successfully',
+        title: 'Error',
+        description: result.error,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const openDeleteDialog = (item: InventoryItem) => {
+    setItemToDelete(item);
+    setIsDeleteOpen(true);
+  };
+
+  const confirmDeleteItem = async () => {
+    if (!itemToDelete) return;
+    setIsDeleting(true);
+
+    const result = await deleteItem(itemToDelete.id);
+
+    if (result.success) {
+      toast({
+        title: 'Item deleted',
+        description: 'The inventory item has been removed successfully.',
+      });
+      setIsDeleteOpen(false);
+      setItemToDelete(null);
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error || 'Failed to delete item',
+        variant: 'destructive',
       });
     }
 
-    setIsFormOpen(false);
+    setIsDeleting(false);
   };
 
-  const handleMovement = (e: React.FormEvent) => {
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!newCategoryName.trim()) {
+      toast({
+        title: 'Validation Error',
+        description: 'Category name is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsCreatingCategory(true);
+    
+    const result = await createCategory(newCategoryName.trim(), newCategoryDescription.trim() || undefined);
+    
+    if (result.success) {
+      toast({
+        title: 'Category Created',
+        description: `${newCategoryName} has been added successfully`,
+      });
+      setNewCategoryName('');
+      setNewCategoryDescription('');
+      setIsCategoryDialogOpen(false);
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error || 'Failed to create category',
+        variant: 'destructive',
+      });
+    }
+    
+    setIsCreatingCategory(false);
+  };
+
+  const openEditCategory = (category: InventoryCategory) => {
+    setEditingCategory(category);
+    setNewCategoryName(category.name);
+    setNewCategoryDescription(category.description || '');
+  };
+
+  const handleUpdateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!editingCategory || !newCategoryName.trim()) {
+      toast({
+        title: 'Validation Error',
+        description: 'Category name is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsCreatingCategory(true);
+    
+    const result = await updateCategory(editingCategory.id, newCategoryName.trim(), newCategoryDescription.trim() || undefined);
+    
+    if (result.success) {
+      toast({
+        title: 'Category Updated',
+        description: `${newCategoryName} has been updated successfully`,
+      });
+      setEditingCategory(null);
+      setNewCategoryName('');
+      setNewCategoryDescription('');
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error || 'Failed to update category',
+        variant: 'destructive',
+      });
+    }
+    
+    setIsCreatingCategory(false);
+  };
+
+  const openDeleteCategoryDialog = (category: InventoryCategory) => {
+    setCategoryToDelete(category);
+    setIsDeleteCategoryOpen(true);
+  };
+
+  const confirmDeleteCategory = async () => {
+    if (!categoryToDelete) return;
+    setIsDeletingCategory(true);
+
+    const result = await deleteCategory(categoryToDelete.id);
+
+    if (result.success) {
+      toast({
+        title: 'Category Deleted',
+        description: `${categoryToDelete.name} has been removed successfully`,
+      });
+      setIsDeleteCategoryOpen(false);
+      setCategoryToDelete(null);
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error || 'Failed to delete category',
+        variant: 'destructive',
+      });
+    }
+
+    setIsDeletingCategory(false);
+  };
+
+  const handleMovement = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!movementData.movement_type || movementData.quantity <= 0 || !selectedItem) {
@@ -212,41 +364,24 @@ export default function Inventory() {
       return;
     }
 
-    let newQuantity = selectedItem.current_quantity;
-    
-    switch (movementData.movement_type) {
-      case 'stock_in':
-        newQuantity += movementData.quantity;
-        break;
-      case 'stock_out':
-        newQuantity -= movementData.quantity;
-        if (newQuantity < 0) {
-          toast({
-            title: 'Error',
-            description: 'Cannot remove more than available quantity',
-            variant: 'destructive',
-          });
-          return;
-        }
-        break;
-      case 'adjustment':
-        newQuantity = movementData.quantity;
-        break;
-    }
-
-    const newStatus = getStatus(newQuantity, selectedItem.minimum_threshold);
-
-    setItems(items.map(i => 
-      i.id === selectedItem.id 
-        ? { ...i, current_quantity: newQuantity, status: newStatus, unit_cost: movementData.unit_cost }
-        : i
-    ));
-
-    setIsMovementOpen(false);
-    toast({
-      title: 'Stock Updated',
-      description: `${selectedItem.item_name} quantity updated to ${newQuantity}`,
+    const result = await recordMovement(selectedItem.id, {
+      ...movementData,
+      movement_type: movementData.movement_type as MovementType,
     });
+
+    if (result.success) {
+      setIsMovementOpen(false);
+      toast({
+        title: 'Stock Updated',
+        description: `${selectedItem.item_name} quantity updated`,
+      });
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error,
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
@@ -321,7 +456,7 @@ export default function Inventory() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
-                {mockInventoryCategories.map(cat => (
+                {categories.map(cat => (
                   <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                 ))}
               </SelectContent>
@@ -338,10 +473,16 @@ export default function Inventory() {
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={openCreateForm}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Item
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setIsCategoryDialogOpen(true)}>
+              <List className="h-4 w-4 mr-2" />
+              Manage Categories
+            </Button>
+            <Button onClick={openCreateForm}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Item
+            </Button>
+          </div>
         </div>
 
         {/* Items Table */}
@@ -362,8 +503,38 @@ export default function Inventory() {
             <TableBody>
               {filteredItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
-                    No items found
+                  <TableCell colSpan={8} className="text-center py-12">
+                    {categories.length === 0 ? (
+                      <div className="space-y-4">
+                        <Package className="h-12 w-12 mx-auto text-muted-foreground" />
+                        <div>
+                          <h3 className="font-semibold text-lg">No categories found</h3>
+                          <p className="text-muted-foreground mb-2">
+                            Create your first category to start organizing inventory items
+                          </p>
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Examples: Instruments, Materials, Consumables, Medications, Equipment
+                          </p>
+                          <Button 
+                            onClick={() => setIsCategoryDialogOpen(true)}
+                            className="mx-auto"
+                          >
+                            <List className="h-4 w-4 mr-2" />
+                            Create Your First Category
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <Package className="h-12 w-12 mx-auto text-muted-foreground" />
+                        <div>
+                          <h3 className="font-semibold text-lg">No items found</h3>
+                          <p className="text-muted-foreground">
+                            Get started by adding your first inventory item
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -410,6 +581,13 @@ export default function Inventory() {
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openDeleteDialog(item)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -453,12 +631,29 @@ export default function Inventory() {
                 <label className="form-label">Category *</label>
                 <Select value={formData.category_id} onValueChange={(v) => setFormData({...formData, category_id: v})}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
+                    <SelectValue placeholder={categories.length === 0 ? "No categories available" : "Select category"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockInventoryCategories.map(cat => (
-                      <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                    ))}
+                    {categories.length === 0 ? (
+                      <div className="p-2 text-center">
+                        <p className="text-sm text-muted-foreground mb-2">No categories found</p>
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setIsCategoryDialogOpen(true);
+                          }}
+                        >
+                          Create Category
+                        </Button>
+                      </div>
+                    ) : (
+                      categories.map(cat => (
+                        <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -651,6 +846,174 @@ export default function Inventory() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={isDeleteOpen}
+        onOpenChange={(open) => {
+          if (isDeleting) return;
+          setIsDeleteOpen(open);
+          if (!open) setItemToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete item</AlertDialogTitle>
+            <AlertDialogDescription>
+              {itemToDelete
+                ? `Are you sure you want to delete item ${itemToDelete.item_name}? This action cannot be undone.`
+                : 'Are you sure you want to delete this item? This action cannot be undone.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeleting || !itemToDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDeleteItem();
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Category Management Dialog */}
+      <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Categories</DialogTitle>
+            <DialogDescription>
+              Create new inventory categories for your clinic
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {categories.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium mb-2">Existing Categories</h4>
+                <div className="space-y-1">
+                  {categories.map(cat => (
+                    <div key={cat.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                      <div className="flex-1">
+                        <span className="text-sm font-medium">{cat.name}</span>
+                        {cat.description && (
+                          <p className="text-xs text-muted-foreground">{cat.description}</p>
+                        )}
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openEditCategory(cat)}
+                          className="h-8 w-8"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openDeleteCategoryDialog(cat)}
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="border-t pt-4">
+              <h4 className="text-sm font-medium mb-2">
+                {editingCategory ? 'Edit Category' : 'Create New Category'}
+              </h4>
+              <form onSubmit={editingCategory ? handleUpdateCategory : handleCreateCategory} className="space-y-3">
+                <div>
+                  <label className="form-label">Category Name *</label>
+                  <Input
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="e.g., Instruments, Materials, Consumables"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Description</label>
+                  <Textarea
+                    value={newCategoryDescription}
+                    onChange={(e) => setNewCategoryDescription(e.target.value)}
+                    placeholder="Optional description"
+                    rows={2}
+                  />
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => {
+                setIsCategoryDialogOpen(false);
+                setEditingCategory(null);
+                setNewCategoryName('');
+                setNewCategoryDescription('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="submit"
+              onClick={editingCategory ? handleUpdateCategory : handleCreateCategory}
+              disabled={!newCategoryName.trim() || isCreatingCategory}
+            >
+              {isCreatingCategory 
+                ? (editingCategory ? 'Updating...' : 'Creating...')
+                : (editingCategory ? 'Update Category' : 'Create Category')
+              }
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Category Delete Confirmation Dialog */}
+      <AlertDialog
+        open={isDeleteCategoryOpen}
+        onOpenChange={(open) => {
+          if (isDeletingCategory) return;
+          setIsDeleteCategoryOpen(open);
+          if (!open) setCategoryToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete category</AlertDialogTitle>
+            <AlertDialogDescription>
+              {categoryToDelete
+                ? `Are you sure you want to delete category "${categoryToDelete.name}"? This action cannot be undone.`
+                : 'Are you sure you want to delete this category? This action cannot be undone.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingCategory}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeletingCategory || !categoryToDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDeleteCategory();
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

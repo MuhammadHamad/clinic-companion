@@ -23,9 +23,9 @@ interface NavItem {
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Patients', href: '/patients', icon: Users },
-  { name: 'Appointments', href: '/appointments', icon: Calendar },
   { name: 'Invoices', href: '/invoices', icon: FileText, allowedRoles: ['admin', 'receptionist'] },
   { name: 'Inventory', href: '/inventory', icon: Package, allowedRoles: ['admin'] },
+  { name: 'Appointments', href: '/appointments', icon: Calendar },
   { name: 'Reports', href: '/reports', icon: BarChart3, allowedRoles: ['admin', 'dentist'] },
 ];
 
@@ -37,12 +37,18 @@ interface SidebarProps {
 export function Sidebar({ onLogout, user }: SidebarProps) {
   const location = useLocation();
 
-  const { role, canAccessSettings, isLoading: isRoleLoading } = useUserRole();
+  const { role, isSuperAdmin, canAccessSettings, isLoading: isRoleLoading } = useUserRole();
+
+  if (isSuperAdmin) {
+    return null;
+  }
 
   // Filter navigation based on user role
   const filteredNavigation = navigation.filter((item) => {
     if (!item.allowedRoles) return true;
     if (!role) return false;
+    // For role-gated clinic items, treat super_admin like admin.
+    if (role === 'super_admin') return item.allowedRoles.includes('admin');
     return item.allowedRoles.includes(role);
   });
 
@@ -89,7 +95,7 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-sidebar-foreground truncate">
-                {user?.first_name || 'Admin'} {user?.last_name || 'User'}
+                {user?.first_name || 'Admin'} {user?.last_name}
               </p>
               <p className="text-xs text-sidebar-muted capitalize">
                 {role || user?.role || 'User'}

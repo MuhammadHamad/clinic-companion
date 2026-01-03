@@ -2,15 +2,17 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { SuperAdminRoute } from "@/components/auth/SuperAdminRoute";
+import { SaasLayout } from "@/components/layout/SaasLayout";
 
 // Pages
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
-import Dashboard from "./pages/Dashboard";
+import Home from "./pages/Home";
 import Patients from "./pages/Patients";
 import Appointments from "./pages/Appointments";
 import Invoices from "./pages/Invoices";
@@ -18,6 +20,9 @@ import Inventory from "./pages/Inventory";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import SaasOverview from "./pages/saas/SaasOverview";
+import SaasClinics from "./pages/saas/SaasClinics";
+import SaasUsers from "./pages/saas/SaasUsers";
 
 const queryClient = new QueryClient();
 
@@ -41,13 +46,28 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/" element={<Home />} />
               <Route path="/patients" element={<Patients />} />
               <Route path="/appointments" element={<Appointments />} />
               <Route path="/invoices" element={<Invoices />} />
               <Route path="/inventory" element={<Inventory />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<Settings />} />
+            </Route>
+
+            <Route
+              path="/saas"
+              element={
+                <ProtectedRoute>
+                  <SuperAdminRoute>
+                    <SaasLayout />
+                  </SuperAdminRoute>
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<SaasOverview />} />
+              <Route path="clinics" element={<SaasClinics />} />
+              <Route path="users" element={<SaasUsers />} />
             </Route>
 
             {/* Fallback */}

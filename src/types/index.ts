@@ -168,6 +168,12 @@ export interface DashboardStats {
     outstanding: number;
     total_treatments: number;
   };
+  year: {
+    current_month: number;
+    previous_month: number;
+    ytd_revenue: number;
+    monthly_trend: Array<{ month: string; revenue: number }>;
+  };
   alerts: {
     low_stock_count: number;
     overdue_invoices_count: number;

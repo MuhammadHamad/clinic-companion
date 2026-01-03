@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,43 +23,152 @@ import {
   Package,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { mockInvoices, mockInventoryItems, mockPayments, mockTreatmentTypes } from '@/data/mockData';
+import { useInvoices } from '@/hooks/useInvoices';
+import { useInventory } from '@/hooks/useInventory';
+import { usePatients } from '@/hooks/usePatients';
+import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 
 const COLORS = ['hsl(217, 91%, 60%)', 'hsl(160, 84%, 39%)', 'hsl(38, 92%, 50%)', 'hsl(280, 65%, 60%)', 'hsl(340, 75%, 55%)'];
 
 export default function Reports() {
+  const { invoices } = useInvoices();
+  const { items } = useInventory();
+  const { patients } = usePatients();
   const [dateRange, setDateRange] = useState({
     start: new Date(new Date().setDate(1)).toISOString().split('T')[0], // First day of month
     end: new Date().toISOString().split('T')[0], // Today
   });
 
+  const [paymentBreakdown, setPaymentBreakdown] = useState<{
+    method: string;
+    amount: number;
+    count: number;
+  }[]>([]);
+
+  const [paymentsInRange, setPaymentsInRange] = useState<{
+    invoice_id: string;
+    amount: number;
+    payment_method: string;
+    payment_date: string;
+  }[]>([]);
+
+  const [isLoadingPayments, setIsLoadingPayments] = useState(false);
+
+  const paymentsStats = useMemo(() => {
+    const totalRevenue = paymentsInRange.reduce((sum, p) => sum + p.amount, 0);
+    const invoiceIds = new Set<string>();
+    paymentsInRange.forEach((p) => {
+      if (p.invoice_id) invoiceIds.add(p.invoice_id);
+    });
+
+    return {
+      totalRevenue,
+      invoiceCount: invoiceIds.size,
+    };
+  }, [paymentsInRange]);
+
   // Revenue Report Data
   const revenueData = {
-    total_revenue: mockInvoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + i.total_amount, 0),
-    total_patients: new Set(mockInvoices.map(i => i.patient_id)).size,
-    total_invoices: mockInvoices.length,
+    total_revenue:
+      paymentsStats.totalRevenue > 0
+        ? paymentsStats.totalRevenue
+        : invoices.filter((i) => i.status === 'paid').reduce((sum, i) => sum + i.total_amount, 0),
+    total_patients: new Set(invoices.map(i => i.patient_id)).size,
+    total_invoices: paymentsStats.invoiceCount > 0 ? paymentsStats.invoiceCount : invoices.length,
     average_transaction: 0,
   };
   revenueData.average_transaction = revenueData.total_invoices > 0 
     ? Math.round(revenueData.total_revenue / revenueData.total_invoices) 
     : 0;
 
-  const paymentBreakdown = [
-    { method: 'Cash', amount: 50000, count: 12 },
-    { method: 'Card', amount: 75000, count: 8 },
-    { method: 'Bank Transfer', amount: 25000, count: 3 },
-    { method: 'Cheque', amount: 5000, count: 1 },
-  ];
+  // Invoices filtered by selected invoice_date range
+  const invoicesInRange = useMemo(() => {
+    if (!dateRange.start || !dateRange.end) return invoices;
 
-  const treatmentBreakdown = mockTreatmentTypes.map(t => ({
-    name: t.name,
-    revenue: Math.floor(Math.random() * 50000) + 10000,
-    count: Math.floor(Math.random() * 20) + 5,
-  })).slice(0, 6);
+    const startDate = new Date(dateRange.start);
+    const endDate = new Date(dateRange.end);
+    endDate.setHours(23, 59, 59, 999);
+
+    return invoices.filter((inv) => {
+      if (!inv.invoice_date) return false;
+      const invDate = new Date(inv.invoice_date);
+      return invDate >= startDate && invDate <= endDate;
+    });
+  }, [invoices, dateRange.start, dateRange.end]);
+
+  // Revenue by Treatment Type from invoice items on paid invoices in the selected period
+  const treatmentBreakdown = useMemo(() => {
+    const map = new Map<string, { name: string; revenue: number; count: number }>();
+
+    invoicesInRange
+      .filter((inv) => inv.status === 'paid')
+      .forEach((inv) => {
+        (inv.items || []).forEach((item) => {
+          const name = item.description || 'Other';
+          const existing = map.get(name) || { name, revenue: 0, count: 0 };
+          existing.revenue += item.total;
+          existing.count += 1;
+          map.set(name, existing);
+        });
+      });
+
+    return Array.from(map.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 6);
+  }, [invoicesInRange]);
+
+  // Payment Method Breakdown from real payments data, scoped by RLS (per clinic) and dateRange
+  useEffect(() => {
+    const fetchPaymentBreakdown = async () => {
+      try {
+        setIsLoadingPayments(true);
+        let query = supabase
+          .from('payments')
+          .select('invoice_id, payment_method, amount, payment_date');
+
+        if (dateRange.start) {
+          query = query.gte('payment_date', dateRange.start);
+        }
+        if (dateRange.end) {
+          query = query.lte('payment_date', dateRange.end);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const payments = (data || []).map((p: any) => ({
+          invoice_id: p.invoice_id as string,
+          payment_method: p.payment_method as string,
+          amount: Number(p.amount) || 0,
+          payment_date: p.payment_date as string,
+        }));
+
+        setPaymentsInRange(payments);
+
+        const map = new Map<string, { method: string; amount: number; count: number }>();
+
+        payments.forEach((p) => {
+          const existing = map.get(p.payment_method) || { method: p.payment_method, amount: 0, count: 0 };
+          existing.amount += p.amount;
+          existing.count += 1;
+          map.set(p.payment_method, existing);
+        });
+
+        const breakdown = Array.from(map.values()).sort((a, b) => b.amount - a.amount);
+        setPaymentBreakdown(breakdown);
+      } catch (error) {
+        console.error('Error fetching payment breakdown:', error);
+      } finally {
+        setIsLoadingPayments(false);
+      }
+    };
+
+    fetchPaymentBreakdown();
+  }, [dateRange.start, dateRange.end]);
 
   // Outstanding Report Data
-  const outstandingInvoices = mockInvoices.filter(i => i.status !== 'paid');
+  const outstandingInvoices = invoices.filter(i => i.status !== 'paid');
   const totalOutstanding = outstandingInvoices.reduce((sum, i) => sum + i.balance, 0);
 
   const agingAnalysis = [
@@ -71,10 +180,10 @@ export default function Reports() {
 
   // Inventory Report Data
   const inventoryStats = {
-    total_value: mockInventoryItems.reduce((sum, i) => sum + (i.current_quantity * (i.unit_cost || 0)), 0),
-    total_items: mockInventoryItems.length,
-    low_stock: mockInventoryItems.filter(i => i.status === 'low_stock').length,
-    out_of_stock: mockInventoryItems.filter(i => i.status === 'out_of_stock').length,
+    total_value: items.reduce((sum, i) => sum + (i.current_quantity * (i.unit_cost || 0)), 0),
+    total_items: items.length,
+    low_stock: items.filter(i => i.status === 'low_stock').length,
+    out_of_stock: items.filter(i => i.status === 'out_of_stock').length,
   };
 
   const categoryBreakdown = [
@@ -187,32 +296,41 @@ export default function Reports() {
                   <CardTitle className="text-lg">Payment Method Breakdown</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {paymentBreakdown.map((item, index) => (
-                      <div key={item.method} className="flex items-center gap-4">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                        />
-                        <div className="flex-1">
-                          <div className="flex justify-between mb-1">
-                            <span className="text-sm font-medium">{item.method}</span>
-                            <span className="text-sm text-muted-foreground">{item.count} payments</span>
-                          </div>
-                          <div className="h-2 bg-muted rounded-full overflow-hidden">
+                  {isLoadingPayments ? (
+                    <p className="text-sm text-muted-foreground">Loading payment data...</p>
+                  ) : paymentBreakdown.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No payments in the selected period.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {(() => {
+                        const totalAmount = paymentBreakdown.reduce((sum, p) => sum + p.amount, 0) || 1;
+                        return paymentBreakdown.map((item, index) => (
+                          <div key={item.method} className="flex items-center gap-4">
                             <div 
-                              className="h-full rounded-full transition-all"
-                              style={{ 
-                                width: `${(item.amount / 155000) * 100}%`,
-                                backgroundColor: COLORS[index % COLORS.length]
-                              }}
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: COLORS[index % COLORS.length] }}
                             />
+                            <div className="flex-1">
+                              <div className="flex justify-between mb-1">
+                                <span className="text-sm font-medium">{item.method}</span>
+                                <span className="text-sm text-muted-foreground">{item.count} payments</span>
+                              </div>
+                              <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full rounded-full transition-all"
+                                  style={{ 
+                                    width: `${(item.amount / totalAmount) * 100}%`,
+                                    backgroundColor: COLORS[index % COLORS.length]
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            <span className="font-medium w-24 text-right">Rs. {item.amount.toLocaleString()}</span>
                           </div>
-                        </div>
-                        <span className="font-medium w-24 text-right">Rs. {item.amount.toLocaleString()}</span>
-                      </div>
-                    ))}
-                  </div>
+                        ));
+                      })()}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -461,7 +579,7 @@ export default function Reports() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {mockInventoryItems
+                      {items
                         .filter(i => i.status !== 'in_stock')
                         .map((item) => (
                           <TableRow key={item.id}>

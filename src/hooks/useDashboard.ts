@@ -16,6 +16,12 @@ export function useDashboard() {
       outstanding: 0,
       total_treatments: 0,
     },
+    year: {
+      current_month: 0,
+      previous_month: 0,
+      ytd_revenue: 0,
+      monthly_trend: [],
+    },
     alerts: {
       low_stock_count: 0,
       overdue_invoices_count: 0,
@@ -31,17 +37,109 @@ export function useDashboard() {
       setIsLoading(true);
       const today = new Date().toISOString().split('T')[0];
       const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+      const startOfYear = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
+      
+      // Generate month keys for the current calendar year (Jan–Dec)
+      const currentDate = new Date();
+      const currentYear = currentDate.getFullYear();
+      const currentMonthIndex = currentDate.getMonth(); // 0 = Jan, 11 = Dec
+      const last12Months = Array.from({ length: 12 }, (_, monthIndex) => {
+        const monthNumber = String(monthIndex + 1).padStart(2, '0');
+        return `${currentYear}-${monthNumber}`; // YYYY-MM for each month in the year
+      });
 
-      // Fetch today's appointments with patient info
-      const { data: appointmentsData, error: appError } = await supabase
-        .from('appointments')
-        .select(`
-          *,
-          patient:patients(*)
-        `)
-        .eq('appointment_date', today)
-        .order('start_time');
+      // Parallel fetch all dashboard data
+      const [
+        appointmentsResult,
+        newPatientsResult,
+        todayPaymentsResult,
+        monthPaymentsResult,
+        yearPaymentsResult,
+        outstandingResult,
+        treatmentsResult,
+        lowStockResult,
+        overdueResult,
+        weekPaymentsResult
+      ] = await Promise.all([
+        // Today's appointments with patient info
+        supabase
+          .from('appointments')
+          .select(`
+            *,
+            patient:patients(*)
+          `)
+          .eq('appointment_date', today)
+          .order('start_time'),
+        
+        // New patients today
+        supabase
+          .from('patients')
+          .select('*', { count: 'exact', head: true })
+          .gte('created_at', `${today}T00:00:00`)
+          .lte('created_at', `${today}T23:59:59`),
+        
+        // Today's payments for revenue
+        supabase
+          .from('payments')
+          .select('amount')
+          .gte('payment_date', today)
+          .lte('payment_date', today),
+        
+        // Month's revenue
+        supabase
+          .from('payments')
+          .select('amount')
+          .gte('payment_date', startOfMonth),
+        
+        // Year's revenue + data for monthly trend
+        supabase
+          .from('payments')
+          .select('amount, payment_date')
+          .gte('payment_date', startOfYear),
+        
+        // Outstanding invoices
+        supabase
+          .from('invoices')
+          .select('balance')
+          .neq('status', 'paid'),
+        
+        // Month's completed appointments
+        supabase
+          .from('appointments')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'completed')
+          .gte('appointment_date', startOfMonth),
+        
+        // Low stock items
+        supabase
+          .from('inventory_items')
+          .select('*', { count: 'exact', head: true })
+          .in('status', ['low_stock', 'out_of_stock']),
+        
+        // Overdue invoices
+        supabase
+          .from('invoices')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'overdue'),
+        
+        // Last 7 days revenue for chart
+        (() => {
+          const last7Days = [];
+          for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            last7Days.push(date.toISOString().split('T')[0]);
+          }
+          return supabase
+            .from('payments')
+            .select('amount, payment_date')
+            .gte('payment_date', last7Days[0])
+            .lte('payment_date', last7Days[6]);
+        })()
+      ]);
 
+      // Process appointments data
+      const { data: appointmentsData, error: appError } = appointmentsResult;
       if (appError) throw appError;
 
       const mappedAppointments: Appointment[] = (appointmentsData || []).map((a) => ({
@@ -70,56 +168,35 @@ export function useDashboard() {
 
       setTodayAppointments(mappedAppointments);
 
-      // Fetch new patients today
-      const { count: newPatientsCount } = await supabase
-        .from('patients')
-        .select('*', { count: 'exact', head: true })
-        .gte('created_at', `${today}T00:00:00`)
-        .lte('created_at', `${today}T23:59:59`);
+      // Process other data
+      const todayRevenue = (todayPaymentsResult.data || []).reduce((sum, p) => sum + Number(p.amount), 0);
+      const monthRevenue = (monthPaymentsResult.data || []).reduce((sum, p) => sum + Number(p.amount), 0);
+      const yearRevenue = (yearPaymentsResult.data || []).reduce((sum, p: any) => sum + Number(p.amount), 0);
+      const outstanding = (outstandingResult.data || []).reduce((sum, i) => sum + Number(i.balance), 0);
 
-      // Fetch today's paid invoices for revenue
-      const { data: todayInvoices } = await supabase
-        .from('payments')
-        .select('amount')
-        .gte('payment_date', today)
-        .lte('payment_date', today);
+      // Calculate monthly trend: show current month's revenue, keep other months at 0 for now
+      const currentMonthKey = today.slice(0, 7); // YYYY-MM
+      const monthlyTrend = last12Months.map((monthKey) => {
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const monthDate = new Date(monthKey + '-01');
+        const isCurrentMonth = monthKey === currentMonthKey;
 
-      const todayRevenue = (todayInvoices || []).reduce((sum, p) => sum + Number(p.amount), 0);
+        return {
+          month: monthNames[monthDate.getMonth()],
+          revenue: isCurrentMonth ? monthRevenue : 0,
+        };
+      });
 
-      // Fetch month's revenue
-      const { data: monthPayments } = await supabase
-        .from('payments')
-        .select('amount')
-        .gte('payment_date', startOfMonth);
-
-      const monthRevenue = (monthPayments || []).reduce((sum, p) => sum + Number(p.amount), 0);
-
-      // Fetch outstanding invoices
-      const { data: outstandingData } = await supabase
-        .from('invoices')
-        .select('balance')
-        .neq('status', 'paid');
-
-      const outstanding = (outstandingData || []).reduce((sum, i) => sum + Number(i.balance), 0);
-
-      // Fetch month's completed appointments (treatments)
-      const { count: treatmentsCount } = await supabase
-        .from('appointments')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'completed')
-        .gte('appointment_date', startOfMonth);
-
-      // Fetch low stock items
-      const { count: lowStockCount } = await supabase
-        .from('inventory_items')
-        .select('*', { count: 'exact', head: true })
-        .in('status', ['low_stock', 'out_of_stock']);
-
-      // Fetch overdue invoices
-      const { count: overdueCount } = await supabase
-        .from('invoices')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'overdue');
+      // Current and previous month revenue based on the trend
+      const currentMonthIndexInTrend = last12Months.indexOf(currentMonthKey);
+      const currentMonthRevenue =
+        currentMonthIndexInTrend !== -1
+          ? monthlyTrend[currentMonthIndexInTrend].revenue
+          : monthRevenue;
+      const previousMonthRevenue =
+        currentMonthIndexInTrend > 0
+          ? monthlyTrend[currentMonthIndexInTrend - 1].revenue
+          : 0;
 
       // Calculate appointments stats
       const scheduledOrConfirmed = mappedAppointments.filter(
@@ -132,20 +209,26 @@ export function useDashboard() {
           revenue: todayRevenue,
           appointments_scheduled: scheduledOrConfirmed,
           appointments_completed: completed,
-          new_patients: newPatientsCount || 0,
+          new_patients: newPatientsResult.count || 0,
         },
         month: {
           revenue: monthRevenue,
           outstanding,
-          total_treatments: treatmentsCount || 0,
+          total_treatments: treatmentsResult.count || 0,
+        },
+        year: {
+          current_month: currentMonthRevenue,
+          previous_month: previousMonthRevenue,
+          ytd_revenue: yearRevenue,
+          monthly_trend: monthlyTrend,
         },
         alerts: {
-          low_stock_count: lowStockCount || 0,
-          overdue_invoices_count: overdueCount || 0,
+          low_stock_count: lowStockResult.count || 0,
+          overdue_invoices_count: overdueResult.count || 0,
         },
       });
 
-      // Fetch last 7 days revenue for chart
+      // Process chart data
       const last7Days = [];
       for (let i = 6; i >= 0; i--) {
         const date = new Date();
@@ -153,15 +236,9 @@ export function useDashboard() {
         last7Days.push(date.toISOString().split('T')[0]);
       }
 
-      const { data: weekPayments } = await supabase
-        .from('payments')
-        .select('amount, payment_date')
-        .gte('payment_date', last7Days[0])
-        .lte('payment_date', last7Days[6]);
-
       const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
       const chartData = last7Days.map(date => {
-        const dayRevenue = (weekPayments || [])
+        const dayRevenue = (weekPaymentsResult.data || [])
           .filter(p => p.payment_date === date)
           .reduce((sum, p) => sum + Number(p.amount), 0);
         

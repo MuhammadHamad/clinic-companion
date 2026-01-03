@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 
-export type AppRole = 'admin' | 'dentist' | 'receptionist';
+export type AppRole = 'admin' | 'dentist' | 'receptionist' | 'super_admin';
 
 interface UseUserRoleReturn {
   role: AppRole | null;
   isLoading: boolean;
+  isSuperAdmin: boolean;
   isAdmin: boolean;
   isDentist: boolean;
   isReceptionist: boolean;
@@ -55,7 +56,8 @@ export function useUserRole(): UseUserRoleReturn {
     fetchRole();
   }, [user, isAuthenticated]);
 
-  const isAdmin = role === 'admin';
+  const isSuperAdmin = role === 'super_admin';
+  const isAdmin = role === 'admin' || isSuperAdmin;
   const isDentist = role === 'dentist';
   const isReceptionist = role === 'receptionist';
 
@@ -67,15 +69,16 @@ export function useUserRole(): UseUserRoleReturn {
   // Admin: Full access
   // Dentist: Can view patients, appointments, limited settings
   // Receptionist: Limited access, no settings
-  const canAccessSettings = isAdmin;
-  const canManagePatients = isAdmin || isDentist || isReceptionist;
-  const canManageAppointments = isAdmin || isDentist || isReceptionist;
-  const canManageInvoices = isAdmin || isReceptionist;
-  const canViewReports = isAdmin || isDentist;
+  const canAccessSettings = isAdmin || isSuperAdmin;
+  const canManagePatients = isSuperAdmin || isAdmin || isDentist || isReceptionist;
+  const canManageAppointments = isSuperAdmin || isAdmin || isDentist || isReceptionist;
+  const canManageInvoices = isSuperAdmin || isAdmin || isReceptionist;
+  const canViewReports = isSuperAdmin || isAdmin || isDentist;
 
   return {
     role,
     isLoading,
+    isSuperAdmin,
     isAdmin,
     isDentist,
     isReceptionist,

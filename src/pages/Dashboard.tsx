@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Header } from '@/components/layout/Header';
 import {
   DollarSign,
@@ -28,6 +29,21 @@ const statusColors: Record<string, string> = {
 
 export default function Dashboard() {
   const { stats, todayAppointments, revenueData, isLoading } = useDashboard();
+
+  // Use the trend from state directly so the bar aligns with the real current month index
+  const monthlyTrendData = useMemo(
+    () => stats.year.monthly_trend || [],
+    [stats.year.monthly_trend]
+  );
+
+  // Compute a sensible Y-axis max in 100k steps so the bar is not always full height
+  const monthlyAxisMax = useMemo(() => {
+    if (!monthlyTrendData.length) return 500000; // default 500k when no data yet
+    const maxRevenue = Math.max(...monthlyTrendData.map((m) => m.revenue || 0), 0);
+    const step = 100000; // 100k steps
+    if (maxRevenue === 0) return 500000;
+    return Math.max(step * 5, Math.ceil(maxRevenue / step) * step); // at least 500k
+  }, [monthlyTrendData]);
 
   if (isLoading) {
     return (
@@ -179,26 +195,47 @@ export default function Dashboard() {
 
         {/* Charts and Appointments */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Revenue Chart */}
+          {/* Monthly Revenue Trend */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-semibold">Revenue Trend (Last 7 Days)</CardTitle>
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+              <CardTitle className="text-lg font-semibold">Revenue Trend (12 Months)</CardTitle>
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground">Growth</p>
+                <p className={cn(
+                  "text-sm font-semibold",
+                  stats.year.previous_month > 0 && stats.year.current_month > stats.year.previous_month 
+                    ? "text-success" 
+                    : stats.year.previous_month > 0 && stats.year.current_month < stats.year.previous_month
+                    ? "text-destructive"
+                    : "text-muted-foreground"
+                )}>
+                  {stats.year.previous_month > 0 
+                    ? `${((stats.year.current_month - stats.year.previous_month) / stats.year.previous_month * 100).toFixed(1)}%`
+                    : "N/A"
+                  }
+                </p>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={revenueData}>
+                  <BarChart data={monthlyTrendData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                     <XAxis 
-                      dataKey="day" 
+                      dataKey="month" 
                       axisLine={false} 
                       tickLine={false}
-                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                     />
                     <YAxis 
                       axisLine={false} 
                       tickLine={false}
-                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                      domain={[0, monthlyAxisMax]}
+                      ticks={Array.from(
+                        { length: Math.floor(monthlyAxisMax / 100000) + 1 },
+                        (_, i) => i * 100000
+                      )}
                       tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
                     />
                     <Tooltip
@@ -218,9 +255,24 @@ export default function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+              <div className="mt-4 pt-4 border-t border-border">
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Current Month</p>
+                    <p className="text-sm font-semibold">Rs. {stats.year.current_month.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Previous Month</p>
+                    <p className="text-sm font-semibold">Rs. {stats.year.previous_month.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">YTD Revenue</p>
+                    <p className="text-sm font-semibold">Rs. {stats.year.ytd_revenue.toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
-
           {/* Today's Appointments */}
           <Card>
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
@@ -265,6 +317,48 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Weekly Revenue Chart */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg font-semibold">Revenue Trend (Last 7 Days)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={revenueData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="day" 
+                    axisLine={false} 
+                    tickLine={false}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                    tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                    }}
+                    formatter={(value: number) => [`Rs. ${value.toLocaleString()}`, 'Revenue']}
+                  />
+                  <Bar 
+                    dataKey="revenue" 
+                    fill="hsl(var(--primary))" 
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

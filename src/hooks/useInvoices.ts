@@ -8,6 +8,46 @@ export function useInvoices() {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
+  const mapRowToInvoice = (inv: any): Invoice => ({
+    id: inv.id,
+    invoice_number: inv.invoice_number,
+    patient_id: inv.patient_id,
+    invoice_date: inv.invoice_date,
+    due_date: inv.due_date,
+    subtotal: Number(inv.subtotal),
+    discount_amount: Number(inv.discount_amount),
+    tax_amount: Number(inv.tax_amount),
+    total_amount: Number(inv.total_amount),
+    amount_paid: Number(inv.amount_paid),
+    balance: Number(inv.balance),
+    status: inv.status as InvoiceStatus,
+    payment_terms: inv.payment_terms,
+    notes: inv.notes,
+    created_at: inv.created_at,
+    patient: inv.patient
+      ? ({
+          id: inv.patient.id,
+          patient_number: inv.patient.patient_number,
+          first_name: inv.patient.first_name,
+          last_name: inv.patient.last_name,
+          phone: inv.patient.phone,
+          email: inv.patient.email,
+          status: inv.patient.status as 'active' | 'inactive',
+          registration_date: inv.patient.registration_date,
+          created_at: inv.patient.created_at,
+        } as Patient)
+      : undefined,
+    items: (inv.items || []).map((item: any) => ({
+      id: item.id,
+      invoice_id: item.invoice_id,
+      description: item.description,
+      tooth_number: item.tooth_number,
+      quantity: item.quantity,
+      unit_price: Number(item.unit_price),
+      total: Number(item.total),
+    })),
+  });
+
   const fetchInvoices = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -22,45 +62,7 @@ export function useInvoices() {
 
       if (error) throw error;
 
-      const mappedInvoices: Invoice[] = (data || []).map((inv) => ({
-        id: inv.id,
-        invoice_number: inv.invoice_number,
-        patient_id: inv.patient_id,
-        invoice_date: inv.invoice_date,
-        due_date: inv.due_date,
-        subtotal: Number(inv.subtotal),
-        discount_amount: Number(inv.discount_amount),
-        tax_amount: Number(inv.tax_amount),
-        total_amount: Number(inv.total_amount),
-        amount_paid: Number(inv.amount_paid),
-        balance: Number(inv.balance),
-        status: inv.status as InvoiceStatus,
-        payment_terms: inv.payment_terms,
-        notes: inv.notes,
-        created_at: inv.created_at,
-        patient: inv.patient ? {
-          id: inv.patient.id,
-          patient_number: inv.patient.patient_number,
-          first_name: inv.patient.first_name,
-          last_name: inv.patient.last_name,
-          phone: inv.patient.phone,
-          email: inv.patient.email,
-          status: inv.patient.status as 'active' | 'inactive',
-          registration_date: inv.patient.registration_date,
-          created_at: inv.patient.created_at,
-        } as Patient : undefined,
-        items: (inv.items || []).map((item: any) => ({
-          id: item.id,
-          invoice_id: item.invoice_id,
-          description: item.description,
-          tooth_number: item.tooth_number,
-          quantity: item.quantity,
-          unit_price: Number(item.unit_price),
-          total: Number(item.total),
-        })),
-      }));
-
-      setInvoices(mappedInvoices);
+      setInvoices((data || []).map(mapRowToInvoice));
     } catch (error: any) {
       console.error('Error fetching invoices:', error);
       toast({
@@ -124,8 +126,20 @@ export function useInvoices() {
         if (itemsError) throw itemsError;
       }
 
-      await fetchInvoices();
-      return { success: true, data: invoice };
+      const { data: invoiceWithJoins, error: invoiceFetchError } = await supabase
+        .from('invoices')
+        .select(`
+          *,
+          patient:patients(*),
+          items:invoice_items(*)
+        `)
+        .eq('id', invoice.id)
+        .single();
+
+      if (invoiceFetchError) throw invoiceFetchError;
+
+      setInvoices((prev) => [mapRowToInvoice(invoiceWithJoins), ...prev]);
+      return { success: true, data: invoiceWithJoins };
     } catch (error: any) {
       console.error('Error creating invoice:', error);
       return { success: false, error: error.message };
@@ -172,10 +186,45 @@ export function useInvoices() {
 
       if (updateError) throw updateError;
 
-      await fetchInvoices();
+      // Optimistically update local state instead of re-fetching all invoices
+      setInvoices((prev) =>
+        prev.map((inv) =>
+          inv.id === invoiceId
+            ? {
+                ...inv,
+                amount_paid: newAmountPaid,
+                balance: Math.max(0, newBalance),
+                status: newStatus,
+              }
+            : inv,
+        ),
+      );
+
       return { success: true };
     } catch (error: any) {
       console.error('Error recording payment:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const deleteInvoice = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('invoices')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setInvoices((prev) => prev.filter((inv) => inv.id !== id));
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error deleting invoice:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete invoice',
+        variant: 'destructive',
+      });
       return { success: false, error: error.message };
     }
   };
@@ -190,5 +239,6 @@ export function useInvoices() {
     fetchInvoices,
     createInvoice,
     recordPayment,
+    deleteInvoice,
   };
 }

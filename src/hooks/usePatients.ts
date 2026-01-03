@@ -8,6 +8,31 @@ export function usePatients() {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
+  const mapRowToPatient = (p: any): Patient => ({
+    id: p.id,
+    patient_number: p.patient_number,
+    first_name: p.first_name,
+    last_name: p.last_name,
+    date_of_birth: p.date_of_birth,
+    gender: p.gender as 'male' | 'female' | 'other' | undefined,
+    phone: p.phone,
+    email: p.email,
+    address: p.address,
+    city: p.city,
+    emergency_contact_name: p.emergency_contact_name,
+    emergency_contact_phone: p.emergency_contact_phone,
+    allergies: p.allergies,
+    current_medications: p.current_medications,
+    medical_conditions: p.medical_conditions,
+    registration_date: p.registration_date,
+    last_visit_date: p.last_visit_date,
+    notes: p.notes,
+    status: p.status as 'active' | 'inactive',
+    balance: p.balance ? Number(p.balance) : 0,
+    created_at: p.created_at,
+    created_by: p.created_by,
+  });
+
   const fetchPatients = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -18,32 +43,7 @@ export function usePatients() {
 
       if (error) throw error;
 
-      const mappedPatients: Patient[] = (data || []).map((p) => ({
-        id: p.id,
-        patient_number: p.patient_number,
-        first_name: p.first_name,
-        last_name: p.last_name,
-        date_of_birth: p.date_of_birth,
-        gender: p.gender as 'male' | 'female' | 'other' | undefined,
-        phone: p.phone,
-        email: p.email,
-        address: p.address,
-        city: p.city,
-        emergency_contact_name: p.emergency_contact_name,
-        emergency_contact_phone: p.emergency_contact_phone,
-        allergies: p.allergies,
-        current_medications: p.current_medications,
-        medical_conditions: p.medical_conditions,
-        registration_date: p.registration_date,
-        last_visit_date: p.last_visit_date,
-        notes: p.notes,
-        status: p.status as 'active' | 'inactive',
-        balance: p.balance ? Number(p.balance) : 0,
-        created_at: p.created_at,
-        created_by: p.created_by,
-      }));
-
-      setPatients(mappedPatients);
+      setPatients((data || []).map(mapRowToPatient));
     } catch (error: any) {
       console.error('Error fetching patients:', error);
       toast({
@@ -58,7 +58,7 @@ export function usePatients() {
 
   const createPatient = async (patientData: Omit<Patient, 'id' | 'patient_number' | 'created_at' | 'registration_date'>) => {
     try {
-      const { data: userData } = await supabase.auth.getUser();
+      const { data: sessionData } = await supabase.auth.getSession();
       
       const { data, error } = await supabase
         .from('patients')
@@ -79,14 +79,13 @@ export function usePatients() {
           notes: patientData.notes || null,
           status: patientData.status || 'active',
           balance: patientData.balance || 0,
-          created_by: userData.user?.id,
+          created_by: sessionData.session?.user?.id,
         })
         .select()
         .single();
 
       if (error) throw error;
-
-      await fetchPatients();
+      setPatients((prev) => [mapRowToPatient(data), ...prev]);
       return { success: true, data };
     } catch (error: any) {
       console.error('Error creating patient:', error);
@@ -96,7 +95,7 @@ export function usePatients() {
 
   const updatePatient = async (id: string, patientData: Partial<Patient>) => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('patients')
         .update({
           first_name: patientData.first_name,
@@ -115,14 +114,37 @@ export function usePatients() {
           notes: patientData.notes || null,
           status: patientData.status,
         })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      setPatients((prev) => prev.map((p) => (p.id === id ? mapRowToPatient(data) : p)));
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error updating patient:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const deletePatient = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('patients')
+        .delete()
         .eq('id', id);
 
       if (error) throw error;
 
-      await fetchPatients();
+      setPatients((prev) => prev.filter((p) => p.id !== id));
       return { success: true };
     } catch (error: any) {
-      console.error('Error updating patient:', error);
+      console.error('Error deleting patient:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete patient',
+        variant: 'destructive',
+      });
       return { success: false, error: error.message };
     }
   };
@@ -137,5 +159,6 @@ export function usePatients() {
     fetchPatients,
     createPatient,
     updatePatient,
+    deletePatient,
   };
 }

@@ -9,6 +9,96 @@ export function useInventory() {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
+  const mapRowToItem = (item: any): InventoryItem => ({
+    id: item.id,
+    category_id: item.category_id,
+    item_name: item.item_name,
+    item_code: item.item_code,
+    unit_of_measure: item.unit_of_measure,
+    current_quantity: item.current_quantity,
+    minimum_threshold: item.minimum_threshold,
+    unit_cost: item.unit_cost ? Number(item.unit_cost) : undefined,
+    supplier_name: item.supplier_name,
+    supplier_contact: item.supplier_contact,
+    expiry_date: item.expiry_date,
+    status: item.status as InventoryStatus,
+    created_at: item.created_at,
+    category: item.category
+      ? {
+          id: item.category.id,
+          name: item.category.name,
+          description: item.category.description,
+        }
+      : undefined,
+  });
+
+  const seedDefaultCategories = async () => {
+    // Skip auto-seeding for now due to global unique constraint issue
+    // Users will create categories manually as needed
+    console.log('Auto-seeding disabled due to global unique constraint. Users will create categories manually.');
+    return;
+    
+    /* Original seeding code disabled for now
+    const defaultCategories = [
+      { name: 'Instruments', description: 'Dental instruments and tools' },
+      { name: 'Materials', description: 'Dental materials and supplies' },
+      { name: 'Consumables', description: 'Single-use consumable items' },
+      { name: 'Medications', description: 'Pharmaceutical products and medications' },
+      { name: 'Equipment', description: 'Dental equipment and devices' },
+    ];
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session?.user) return;
+
+      // Get user's clinic_id
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('clinic_id')
+        .eq('user_id', sessionData.session.user.id)
+        .single();
+
+      if (!userRole?.clinic_id) return;
+
+      // Check if categories already exist for this clinic
+      const { data: existingCategories } = await supabase
+        .from('inventory_categories')
+        .select('name')
+        .eq('clinic_id', userRole.clinic_id);
+
+      const existingNames = existingCategories?.map(c => c.name) || [];
+      
+      // Only insert categories that don't already exist
+      const categoriesToInsert = defaultCategories.filter(
+        cat => !existingNames.includes(cat.name)
+      );
+
+      if (categoriesToInsert.length === 0) {
+        console.log('Default categories already exist for clinic');
+        return;
+      }
+
+      // Insert missing default categories
+      const { error } = await supabase
+        .from('inventory_categories')
+        .insert(
+          categoriesToInsert.map(cat => ({
+            ...cat,
+            clinic_id: userRole.clinic_id,
+          }))
+        );
+
+      if (error) {
+        console.error('Error seeding default categories:', error);
+      } else {
+        console.log(`Seeded ${categoriesToInsert.length} default categories`);
+      }
+    } catch (error) {
+      console.error('Error seeding default categories:', error);
+    }
+    */
+  };
+
   const fetchCategories = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -18,11 +108,13 @@ export function useInventory() {
 
       if (error) throw error;
 
-      setCategories((data || []).map(c => ({
+      const categories = (data || []).map(c => ({
         id: c.id,
         name: c.name,
         description: c.description,
-      })));
+      }));
+
+      setCategories(categories);
     } catch (error: any) {
       console.error('Error fetching categories:', error);
     }
@@ -41,28 +133,7 @@ export function useInventory() {
 
       if (error) throw error;
 
-      const mappedItems: InventoryItem[] = (data || []).map((item) => ({
-        id: item.id,
-        category_id: item.category_id,
-        item_name: item.item_name,
-        item_code: item.item_code,
-        unit_of_measure: item.unit_of_measure,
-        current_quantity: item.current_quantity,
-        minimum_threshold: item.minimum_threshold,
-        unit_cost: item.unit_cost ? Number(item.unit_cost) : undefined,
-        supplier_name: item.supplier_name,
-        supplier_contact: item.supplier_contact,
-        expiry_date: item.expiry_date,
-        status: item.status as InventoryStatus,
-        created_at: item.created_at,
-        category: item.category ? {
-          id: item.category.id,
-          name: item.category.name,
-          description: item.category.description,
-        } : undefined,
-      }));
-
-      setItems(mappedItems);
+      setItems((data || []).map(mapRowToItem));
     } catch (error: any) {
       console.error('Error fetching inventory:', error);
       toast({
@@ -91,12 +162,14 @@ export function useInventory() {
           supplier_contact: itemData.supplier_contact || null,
           expiry_date: itemData.expiry_date || null,
         })
-        .select()
+        .select(`
+          *,
+          category:inventory_categories(*)
+        `)
         .single();
 
       if (error) throw error;
-
-      await fetchItems();
+      setItems((prev) => [mapRowToItem(data), ...prev]);
       return { success: true, data };
     } catch (error: any) {
       console.error('Error creating item:', error);
@@ -106,7 +179,7 @@ export function useInventory() {
 
   const updateItem = async (id: string, itemData: Partial<InventoryItem>) => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('inventory_items')
         .update({
           item_name: itemData.item_name,
@@ -120,11 +193,15 @@ export function useInventory() {
           supplier_contact: itemData.supplier_contact || null,
           expiry_date: itemData.expiry_date || null,
         })
-        .eq('id', id);
+        .eq('id', id)
+        .select(`
+          *,
+          category:inventory_categories(*)
+        `)
+        .single();
 
       if (error) throw error;
-
-      await fetchItems();
+      setItems((prev) => prev.map((it) => (it.id === id ? mapRowToItem(data) : it)));
       return { success: true };
     } catch (error: any) {
       console.error('Error updating item:', error);
@@ -159,7 +236,7 @@ export function useInventory() {
           break;
       }
 
-      const { data: userData } = await supabase.auth.getUser();
+      const { data: sessionData } = await supabase.auth.getSession();
 
       // Record movement
       const { error: movementError } = await supabase
@@ -172,23 +249,27 @@ export function useInventory() {
           new_quantity: newQuantity,
           unit_cost: movementData.unit_cost || null,
           notes: movementData.notes || null,
-          created_by: userData.user?.id,
+          created_by: sessionData.session?.user?.id,
         });
 
       if (movementError) throw movementError;
 
       // Update item quantity (status will be auto-updated by trigger)
-      const { error: updateError } = await supabase
+      const { data: updatedItem, error: updateError } = await supabase
         .from('inventory_items')
         .update({
           current_quantity: newQuantity,
           unit_cost: movementData.unit_cost || item.unit_cost,
         })
-        .eq('id', itemId);
+        .eq('id', itemId)
+        .select(`
+          *,
+          category:inventory_categories(*)
+        `)
+        .single();
 
       if (updateError) throw updateError;
-
-      await fetchItems();
+      setItems((prev) => prev.map((it) => (it.id === itemId ? mapRowToItem(updatedItem) : it)));
       return { success: true };
     } catch (error: any) {
       console.error('Error recording movement:', error);
@@ -198,18 +279,163 @@ export function useInventory() {
 
   const createCategory = async (name: string, description?: string) => {
     try {
+      // Get user's clinic_id to ensure category is created for the correct clinic
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session?.user) {
+        throw new Error('User not authenticated');
+      }
+
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('clinic_id')
+        .eq('user_id', sessionData.session.user.id)
+        .single();
+
+      if (!userRole?.clinic_id) {
+        throw new Error('User not assigned to a clinic');
+      }
+
+      // Check if category with same name already exists (globally or in this clinic)
+      const { data: existingCategory } = await supabase
+        .from('inventory_categories')
+        .select('id, name, clinic_id')
+        .eq('name', name.trim())
+        .maybeSingle();
+
+      if (existingCategory) {
+        if (existingCategory.clinic_id === userRole.clinic_id) {
+          return { success: false, error: 'A category with this name already exists in your clinic' };
+        } else {
+          // Category exists in another clinic but due to global constraint, we can't create it
+          return { success: false, error: 'A category with this name already exists. Please choose a different name.' };
+        }
+      }
+
       const { data, error } = await supabase
         .from('inventory_categories')
-        .insert({ name, description: description || null })
+        .insert({ 
+          name: name.trim(), 
+          description: description?.trim() || null,
+          clinic_id: userRole.clinic_id,
+        })
         .select()
         .single();
 
       if (error) throw error;
-
-      await fetchCategories();
+      setCategories((prev) =>
+        [...prev, { id: data.id, name: data.name, description: data.description }].sort((a, b) => a.name.localeCompare(b.name)),
+      );
       return { success: true, data };
     } catch (error: any) {
       console.error('Error creating category:', error);
+      
+      // Handle duplicate key error specifically
+      if (error.code === '23505') {
+        return { success: false, error: 'A category with this name already exists. Please choose a different name.' };
+      }
+      
+      return { success: false, error: error.message };
+    }
+  };
+
+  const deleteItem = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('inventory_items')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setItems((prev) => prev.filter((item) => item.id !== id));
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error deleting item:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete item',
+        variant: 'destructive',
+      });
+      return { success: false, error: error.message };
+    }
+  };
+
+  const updateCategory = async (id: string, name: string, description?: string) => {
+    try {
+      // Check if category with same name already exists (excluding current one)
+      const { data: existingCategory } = await supabase
+        .from('inventory_categories')
+        .select('id, name, clinic_id')
+        .eq('name', name.trim())
+        .neq('id', id)
+        .maybeSingle();
+
+      if (existingCategory) {
+        return { success: false, error: 'A category with this name already exists. Please choose a different name.' };
+      }
+
+      const { data, error } = await supabase
+        .from('inventory_categories')
+        .update({ 
+          name: name.trim(), 
+          description: description?.trim() || null,
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      setCategories((prev) => 
+        prev.map((cat) => 
+          cat.id === id 
+            ? { id: data.id, name: data.name, description: data.description }
+            : cat
+        ).sort((a, b) => a.name.localeCompare(b.name))
+      );
+      
+      return { success: true, data };
+    } catch (error: any) {
+      console.error('Error updating category:', error);
+      
+      // Handle duplicate key error specifically
+      if (error.code === '23505') {
+        return { success: false, error: 'A category with this name already exists. Please choose a different name.' };
+      }
+      
+      return { success: false, error: error.message };
+    }
+  };
+
+  const deleteCategory = async (id: string) => {
+    try {
+      // Check if any items are using this category
+      const { data: itemsUsingCategory } = await supabase
+        .from('inventory_items')
+        .select('id')
+        .eq('category_id', id)
+        .limit(1);
+
+      if (itemsUsingCategory && itemsUsingCategory.length > 0) {
+        return { success: false, error: 'Cannot delete category that is being used by inventory items. Please update or delete the items first.' };
+      }
+
+      const { error } = await supabase
+        .from('inventory_categories')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setCategories((prev) => prev.filter((cat) => cat.id !== id));
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error deleting category:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete category',
+        variant: 'destructive',
+      });
       return { success: false, error: error.message };
     }
   };
@@ -229,5 +455,8 @@ export function useInventory() {
     updateItem,
     recordMovement,
     createCategory,
+    updateCategory,
+    deleteItem,
+    deleteCategory,
   };
 }

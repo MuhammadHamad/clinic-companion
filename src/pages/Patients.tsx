@@ -20,6 +20,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -40,6 +50,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Trash2,
 } from 'lucide-react';
 import { usePatients } from '@/hooks/usePatients';
 import { Patient } from '@/types';
@@ -48,7 +59,7 @@ import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Patients() {
-  const { patients, isLoading, createPatient, updatePatient } = usePatients();
+  const { patients, isLoading, createPatient, updatePatient, deletePatient } = usePatients();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -57,6 +68,10 @@ export default function Patients() {
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -145,6 +160,35 @@ export default function Patients() {
   const openViewDialog = (patient: Patient) => {
     setSelectedPatient(patient);
     setIsViewOpen(true);
+  };
+
+  const openDeleteDialog = (patient: Patient) => {
+    setPatientToDelete(patient);
+    setIsDeleteOpen(true);
+  };
+
+  const confirmDeletePatient = async () => {
+    if (!patientToDelete) return;
+    setIsDeleting(true);
+
+    const result = await deletePatient(patientToDelete.id);
+
+    if (result.success) {
+      toast({
+        title: 'Patient deleted',
+        description: 'The patient record has been removed successfully.',
+      });
+      setIsDeleteOpen(false);
+      setPatientToDelete(null);
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error || 'Failed to delete patient',
+        variant: 'destructive',
+      });
+    }
+
+    setIsDeleting(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -323,6 +367,13 @@ export default function Patients() {
                           onClick={() => openEditForm(patient)}
                         >
                           <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openDeleteDialog(patient)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     </TableCell>
@@ -601,6 +652,39 @@ export default function Patients() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={isDeleteOpen}
+        onOpenChange={(open) => {
+          if (isDeleting) return;
+          setIsDeleteOpen(open);
+          if (!open) setPatientToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete patient</AlertDialogTitle>
+            <AlertDialogDescription>
+              {patientToDelete
+                ? `Are you sure you want to delete patient ${patientToDelete.first_name} ${patientToDelete.last_name}? This action cannot be undone.`
+                : 'Are you sure you want to delete this patient? This action cannot be undone.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeleting || !patientToDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDeletePatient();
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

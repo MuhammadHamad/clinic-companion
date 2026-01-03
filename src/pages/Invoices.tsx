@@ -21,6 +21,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -38,7 +48,9 @@ import {
   Trash2,
   CreditCard,
 } from 'lucide-react';
-import { mockInvoices, mockPatients, mockTreatmentTypes } from '@/data/mockData';
+import { useInvoices } from '@/hooks/useInvoices';
+import { usePatients } from '@/hooks/usePatients';
+import { useTreatmentTypes } from '@/hooks/useTreatmentTypes';
 import { Invoice, InvoiceItem, InvoiceStatus, PaymentMethod } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -52,7 +64,9 @@ const statusColors: Record<InvoiceStatus, string> = {
 };
 
 export default function Invoices() {
-  const [invoices, setInvoices] = useState<Invoice[]>(mockInvoices);
+  const { invoices, isLoading, fetchInvoices, createInvoice, recordPayment, deleteInvoice } = useInvoices();
+  const { patients } = usePatients();
+  const { treatmentTypes } = useTreatmentTypes();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -60,6 +74,10 @@ export default function Invoices() {
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const { toast } = useToast();
+
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [formData, setFormData] = useState({
     patient_id: '',
@@ -145,13 +163,42 @@ export default function Invoices() {
     }
   };
 
+  const openDeleteDialog = (invoice: Invoice) => {
+    setInvoiceToDelete(invoice);
+    setIsDeleteOpen(true);
+  };
+
+  const confirmDeleteInvoice = async () => {
+    if (!invoiceToDelete) return;
+    setIsDeleting(true);
+
+    const result = await deleteInvoice(invoiceToDelete.id);
+
+    if (result.success) {
+      toast({
+        title: 'Invoice deleted',
+        description: 'The invoice has been removed successfully.',
+      });
+      setIsDeleteOpen(false);
+      setInvoiceToDelete(null);
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error || 'Failed to delete invoice',
+        variant: 'destructive',
+      });
+    }
+
+    setIsDeleting(false);
+  };
+
   const calculateTotals = () => {
     const subtotal = formData.items.reduce((sum, item) => sum + item.total, 0);
     const total = subtotal - formData.discount_amount + formData.tax_amount;
     return { subtotal, total };
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.patient_id || formData.items.every(i => !i.description)) {
@@ -163,37 +210,33 @@ export default function Invoices() {
       return;
     }
 
-    const patient = mockPatients.find(p => p.id === formData.patient_id);
     const { subtotal, total } = calculateTotals();
     
-    const newInvoice: Invoice = {
-      id: String(Date.now()),
-      invoice_number: `INV-${String(invoices.length + 1).padStart(3, '0')}`,
+    const result = await createInvoice({
       patient_id: formData.patient_id,
-      invoice_date: new Date().toISOString().split('T')[0],
-      subtotal,
+      items: formData.items.filter(i => i.description),
       discount_amount: formData.discount_amount,
       tax_amount: formData.tax_amount,
-      total_amount: total,
-      amount_paid: 0,
-      balance: total,
-      status: 'unpaid',
       payment_terms: formData.payment_terms,
       notes: formData.notes,
-      created_at: new Date().toISOString(),
-      patient,
-      items: formData.items.filter(i => i.description),
-    };
-
-    setInvoices([newInvoice, ...invoices]);
-    setIsFormOpen(false);
-    toast({
-      title: 'Invoice Created',
-      description: `Invoice ${newInvoice.invoice_number} created for Rs. ${total.toLocaleString()}`,
     });
+
+    if (result.success) {
+      setIsFormOpen(false);
+      toast({
+        title: 'Invoice Created',
+        description: `Invoice created for Rs. ${total.toLocaleString()}`,
+      });
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error,
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handlePayment = (e: React.FormEvent) => {
+  const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!paymentData.payment_method || paymentData.amount <= 0 || !selectedInvoice) {
@@ -205,21 +248,26 @@ export default function Invoices() {
       return;
     }
 
-    const newAmountPaid = selectedInvoice.amount_paid + paymentData.amount;
-    const newBalance = selectedInvoice.total_amount - newAmountPaid;
-    const newStatus: InvoiceStatus = newBalance <= 0 ? 'paid' : 'partial';
-
-    setInvoices(invoices.map(inv => 
-      inv.id === selectedInvoice.id 
-        ? { ...inv, amount_paid: newAmountPaid, balance: Math.max(0, newBalance), status: newStatus }
-        : inv
-    ));
-
-    setIsPaymentOpen(false);
-    toast({
-      title: 'Payment Recorded',
-      description: `Rs. ${paymentData.amount.toLocaleString()} payment recorded successfully`,
+    const result = await recordPayment(selectedInvoice.id, {
+      amount: paymentData.amount,
+      payment_method: paymentData.payment_method,
+      reference_number: paymentData.reference_number,
+      notes: paymentData.notes,
     });
+
+    if (result.success) {
+      setIsPaymentOpen(false);
+      toast({
+        title: 'Payment Recorded',
+        description: `Rs. ${paymentData.amount.toLocaleString()} payment recorded successfully`,
+      });
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error,
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
@@ -338,6 +386,15 @@ export default function Invoices() {
                         <Button variant="ghost" size="icon">
                           <Printer className="h-4 w-4" />
                         </Button>
+                        {invoice.status !== 'paid' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openDeleteDialog(invoice)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -364,7 +421,7 @@ export default function Invoices() {
                   <SelectValue placeholder="Select a patient" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockPatients.filter(p => p.status === 'active').map(patient => (
+                  {patients.filter(p => p.status === 'active').map(patient => (
                     <SelectItem key={patient.id} value={patient.id}>
                       {patient.first_name} {patient.last_name} ({patient.patient_number})
                     </SelectItem>
@@ -389,7 +446,7 @@ export default function Invoices() {
                     <Select 
                       value={item.description} 
                       onValueChange={(v) => {
-                        const treatment = mockTreatmentTypes.find(t => t.name === v);
+                        const treatment = treatmentTypes.find(t => t.name === v);
                         updateItem(index, 'description', v);
                         if (treatment) {
                           updateItem(index, 'unit_price', treatment.default_price);
@@ -400,7 +457,7 @@ export default function Invoices() {
                         <SelectValue placeholder="Select treatment" />
                       </SelectTrigger>
                       <SelectContent>
-                        {mockTreatmentTypes.map(type => (
+                        {treatmentTypes.map(type => (
                           <SelectItem key={type.id} value={type.name}>
                             {type.name} - Rs. {type.default_price.toLocaleString()}
                           </SelectItem>
@@ -503,81 +560,100 @@ export default function Invoices() {
 
       {/* View Invoice Dialog */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Invoice {selectedInvoice?.invoice_number}</DialogTitle>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="pb-6 border-b border-border">
+            <DialogTitle className="text-2xl font-bold text-foreground">
+              Invoice {selectedInvoice?.invoice_number}
+            </DialogTitle>
           </DialogHeader>
           
           {selectedInvoice && (
-            <div className="space-y-6">
-              <div className="flex justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Patient</p>
-                  <p className="font-medium">{selectedInvoice.patient?.first_name} {selectedInvoice.patient?.last_name}</p>
+            <div className="space-y-8 py-6">
+              {/* Invoice Header */}
+              <div className="grid grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Patient</p>
+                  <p className="text-lg font-medium text-foreground">
+                    {selectedInvoice.patient?.first_name} {selectedInvoice.patient?.last_name}
+                  </p>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm text-muted-foreground">Date</p>
-                  <p className="font-medium">{selectedInvoice.invoice_date}</p>
+                <div className="text-right space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Date</p>
+                  <p className="text-lg font-medium text-foreground">{selectedInvoice.invoice_date}</p>
                 </div>
               </div>
 
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Tooth</TableHead>
-                    <TableHead className="text-right">Qty</TableHead>
-                    <TableHead className="text-right">Price</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {selectedInvoice.items?.map((item, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{item.description}</TableCell>
-                      <TableCell>{item.tooth_number || '-'}</TableCell>
-                      <TableCell className="text-right">{item.quantity}</TableCell>
-                      <TableCell className="text-right">Rs. {item.unit_price.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">Rs. {item.total.toLocaleString()}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-
-              <div className="border-t border-border pt-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Subtotal</span>
-                  <span>Rs. {selectedInvoice.subtotal.toLocaleString()}</span>
+              {/* Items Table */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Services & Items</h3>
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <Table>
+                    <TableHeader className="bg-muted/30">
+                      <TableRow>
+                        <TableHead className="font-semibold text-foreground">Description</TableHead>
+                        <TableHead className="font-semibold text-foreground">Tooth</TableHead>
+                        <TableHead className="text-right font-semibold text-foreground">Qty</TableHead>
+                        <TableHead className="text-right font-semibold text-foreground">Price</TableHead>
+                        <TableHead className="text-right font-semibold text-foreground">Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedInvoice.items?.map((item, index) => (
+                        <TableRow key={index} className="hover:bg-muted/20 transition-colors">
+                          <TableCell className="font-medium text-foreground">{item.description}</TableCell>
+                          <TableCell className="text-muted-foreground">{item.tooth_number || '-'}</TableCell>
+                          <TableCell className="text-right text-foreground">{item.quantity}</TableCell>
+                          <TableCell className="text-right text-foreground">Rs. {item.unit_price.toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-medium text-foreground">Rs. {item.total.toLocaleString()}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
-                {selectedInvoice.discount_amount > 0 && (
-                  <div className="flex justify-between text-sm text-success">
-                    <span>Discount</span>
-                    <span>-Rs. {selectedInvoice.discount_amount.toLocaleString()}</span>
+              </div>
+
+              {/* Totals Section */}
+              <div className="grid grid-cols-2 gap-8">
+                <div></div>
+                <div className="space-y-1">
+                  <div className="flex justify-between py-2 border-b border-border/50">
+                    <span className="text-sm text-muted-foreground">Subtotal</span>
+                    <span className="text-sm font-medium text-foreground">Rs. {selectedInvoice.subtotal.toLocaleString()}</span>
                   </div>
-                )}
-                <div className="flex justify-between font-bold pt-2 border-t border-border">
-                  <span>Total</span>
-                  <span>Rs. {selectedInvoice.total_amount.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-success">
-                  <span>Paid</span>
-                  <span>Rs. {selectedInvoice.amount_paid.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between font-bold text-lg">
-                  <span>Balance Due</span>
-                  <span className={selectedInvoice.balance > 0 ? 'text-destructive' : ''}>
-                    Rs. {selectedInvoice.balance.toLocaleString()}
-                  </span>
+                  {selectedInvoice.discount_amount > 0 && (
+                    <div className="flex justify-between py-2 border-b border-border/50">
+                      <span className="text-sm text-muted-foreground">Discount</span>
+                      <span className="text-sm font-medium text-success">-Rs. {selectedInvoice.discount_amount.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between py-3 border-t border-border">
+                    <span className="text-base font-semibold text-foreground">Total</span>
+                    <span className="text-base font-bold text-foreground">Rs. {selectedInvoice.total_amount.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <span className="text-sm text-muted-foreground">Paid</span>
+                    <span className="text-sm font-medium text-success">Rs. {selectedInvoice.amount_paid.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between py-3 border-t border-border">
+                    <span className="text-lg font-bold text-foreground">Balance Due</span>
+                    <span className={cn(
+                      "text-lg font-bold",
+                      selectedInvoice.balance > 0 ? "text-destructive" : "text-success"
+                    )}>
+                      Rs. {selectedInvoice.balance.toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1">
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4 border-t border-border">
+                <Button variant="outline" className="flex-1 h-11">
                   <Printer className="h-4 w-4 mr-2" />
                   Print
                 </Button>
                 {selectedInvoice.status !== 'paid' && (
-                  <Button className="flex-1" onClick={() => { setIsViewOpen(false); openPaymentDialog(selectedInvoice); }}>
+                  <Button className="flex-1 h-11" onClick={() => { setIsViewOpen(false); openPaymentDialog(selectedInvoice); }}>
                     <CreditCard className="h-4 w-4 mr-2" />
                     Record Payment
                   </Button>
@@ -654,6 +730,39 @@ export default function Invoices() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={isDeleteOpen}
+        onOpenChange={(open) => {
+          if (isDeleting) return;
+          setIsDeleteOpen(open);
+          if (!open) setInvoiceToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete invoice</AlertDialogTitle>
+            <AlertDialogDescription>
+              {invoiceToDelete
+                ? `Are you sure you want to delete invoice ${invoiceToDelete.invoice_number}? This action cannot be undone.`
+                : 'Are you sure you want to delete this invoice? This action cannot be undone.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeleting || !invoiceToDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDeleteInvoice();
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
