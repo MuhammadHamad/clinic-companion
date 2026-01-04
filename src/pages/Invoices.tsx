@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Table,
   TableBody,
@@ -317,8 +318,9 @@ export default function Invoices() {
   };
 
   return (
-    <div className="min-h-screen">
-      <Header title="Invoices" subtitle="Manage billing and payments" />
+    <TooltipProvider>
+      <div className="min-h-screen">
+        <Header title="Invoices" subtitle="Manage billing and payments" />
       
       <div className="p-6 space-y-6 animate-fade-in">
         {/* Outstanding Summary */}
@@ -413,33 +415,61 @@ export default function Invoices() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openViewDialog(invoice)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openViewDialog(invoice)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>View</p>
+                          </TooltipContent>
+                        </Tooltip>
                         {invoice.status !== 'paid' && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openPaymentDialog(invoice)}
-                          >
-                            <CreditCard className="h-4 w-4" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openPaymentDialog(invoice)}
+                              >
+                                <CreditCard className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Payment</p>
+                            </TooltipContent>
+                          </Tooltip>
                         )}
-                        <Button variant="ghost" size="icon">
-                          <Printer className="h-4 w-4" />
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <Printer className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Print</p>
+                          </TooltipContent>
+                        </Tooltip>
                         {invoice.status !== 'paid' && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openDeleteDialog(invoice)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openDeleteDialog(invoice)}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Delete</p>
+                            </TooltipContent>
+                          </Tooltip>
                         )}
                       </div>
                     </TableCell>
@@ -492,10 +522,17 @@ export default function Invoices() {
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <label className="form-label mb-0">Items</label>
-                <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Item
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button type="button" variant="outline" size="sm" onClick={addItem}>
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add Item
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Add Item</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
               
               {formData.items.map((item, index) => (
@@ -550,15 +587,22 @@ export default function Invoices() {
                     Rs. {item.total.toLocaleString()}
                   </div>
                   <div className="col-span-1">
-                    <Button 
-                      type="button" 
-                      variant="ghost" 
-                      size="icon"
-                      onClick={() => removeItem(index)}
-                      disabled={formData.items.length === 1}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => removeItem(index)}
+                          disabled={formData.items.length === 1}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Remove</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
               ))}
@@ -821,6 +865,7 @@ export default function Invoices() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }

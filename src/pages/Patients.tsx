@@ -17,11 +17,14 @@ import {
   Trash2,
   Archive,
   ArchiveRestore,
+  ArchiveX,
+  RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   Table,
   TableBody,
@@ -111,6 +114,9 @@ export default function Patients() {
   const [duplicatePatientInfo, setDuplicatePatientInfo] = useState<Patient | null>(null);
 
   const [isStatementOpen, setIsStatementOpen] = useState(false);
+  const [isRestoreOpen, setIsRestoreOpen] = useState(false);
+  const [patientToRestore, setPatientToRestore] = useState<Patient | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -140,7 +146,7 @@ export default function Patients() {
       (qDigits.length > 0 ? patientDigits.includes(qDigits) : false) ||
       patient.patient_number.toLowerCase().includes(q);
     
-    const matchesStatus = statusFilter === 'all' || patient.status === statusFilter;
+    const matchesStatus = statusFilter === 'all' ? patient.status !== 'archived' : patient.status === statusFilter;
     
     return matchesSearch && matchesStatus;
   });
@@ -390,13 +396,23 @@ export default function Patients() {
   };
 
   const handleRestorePatient = async (patient: Patient) => {
-    const result = await restorePatient(patient.id);
+    setPatientToRestore(patient);
+    setIsRestoreOpen(true);
+  };
+
+  const confirmRestorePatient = async () => {
+    if (!patientToRestore) return;
+    setIsRestoring(true);
+
+    const result = await restorePatient(patientToRestore.id);
     
     if (result.success) {
       toast({
         title: 'Patient Restored',
         description: 'The patient has been restored to active status.',
       });
+      setIsRestoreOpen(false);
+      setPatientToRestore(null);
     } else {
       toast({
         title: 'Error',
@@ -404,6 +420,8 @@ export default function Patients() {
         variant: 'destructive',
       });
     }
+
+    setIsRestoring(false);
   };
 
   const createPatientFromForm = async () => {
@@ -427,6 +445,8 @@ export default function Patients() {
         variant: 'destructive',
       });
     }
+
+    return result;
   };
 
   const handleDuplicateConfirm = async () => {
@@ -537,8 +557,9 @@ export default function Patients() {
   }
 
   return (
-    <div className="min-h-screen">
-      <Header title="Patients" subtitle="Manage your patient records" />
+    <TooltipProvider>
+      <div className="min-h-screen">
+        <Header title="Patients" subtitle="Manage your patient records" />
       
       <div className="p-6 space-y-6 animate-fade-in">
         {/* Actions Bar */}
@@ -634,37 +655,65 @@ export default function Patients() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openViewDialog(patient)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEditForm(patient)}
-                            disabled={patient.status === 'archived'}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openViewDialog(patient)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>View</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openEditForm(patient)}
+                                disabled={patient.status === 'archived'}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Edit</p>
+                            </TooltipContent>
+                          </Tooltip>
                           {patient.status === 'archived' ? (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleRestorePatient(patient)}
-                            >
-                              <ArchiveRestore className="h-4 w-4 text-green-600" />
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleRestorePatient(patient)}
+                                >
+                                  <ArchiveRestore className="h-4 w-4 text-green-600" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Restore</p>
+                              </TooltipContent>
+                            </Tooltip>
                           ) : (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openDeleteDialog(patient)}
-                            >
-                              <Archive className="h-4 w-4 text-destructive" />
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => openDeleteDialog(patient)}
+                                >
+                                  <ArchiveX className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Archive</p>
+                              </TooltipContent>
+                            </Tooltip>
                           )}
                         </div>
                       </TableCell>
@@ -1545,6 +1594,44 @@ export default function Patients() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+
+      {/* Restore Patient Confirmation Modal */}
+      <Dialog
+        open={isRestoreOpen}
+        onOpenChange={(open) => {
+          if (isRestoring) return;
+          setIsRestoreOpen(open);
+          if (!open) setPatientToRestore(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Restore Patient</DialogTitle>
+            <DialogDescription>
+              {patientToRestore
+                ? `Are you sure you want to restore patient ${patientToRestore.first_name} ${patientToRestore.last_name}? The patient will be moved back to active status and can be edited again.`
+                : 'Are you sure you want to restore this patient? The patient will be moved back to active status and can be edited again.'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRestoreOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmRestorePatient} disabled={isRestoring}>
+              {isRestoring ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Restoring...
+                </>
+              ) : (
+                'Restore Patient'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      </div>
+    </TooltipProvider>
   );
 }
