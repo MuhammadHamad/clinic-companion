@@ -322,22 +322,22 @@ export default function Invoices() {
       <div className="min-h-screen">
         <Header title="Invoices" subtitle="Manage billing and payments" />
       
-      <div className="p-6 space-y-6 animate-fade-in">
+      <div className="p-4 sm:p-6 space-y-6 animate-fade-in">
         {/* Outstanding Summary */}
         <Card className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground">
-          <CardContent className="p-6 flex items-center justify-between">
+          <CardContent className="p-4 sm:p-6 flex items-center justify-between">
             <div>
               <p className="text-sm text-foreground opacity-80">Total Outstanding</p>
-              <p className="text-3xl font-bold text-foreground">Rs. {totalOutstanding.toLocaleString()}</p>
+              <p className="text-2xl sm:text-3xl font-bold text-foreground">Rs. {totalOutstanding.toLocaleString()}</p>
             </div>
-            <DollarSign className="h-12 w-12 opacity-20" />
+            <DollarSign className="h-10 w-10 sm:h-12 sm:w-12 opacity-20" />
           </CardContent>
         </Card>
 
         {/* Actions Bar */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-between">
-          <div className="flex gap-3 flex-1">
-            <div className="relative flex-1 max-w-md">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by invoice # or patient..."
@@ -347,7 +347,7 @@ export default function Invoices() {
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-36">
+              <SelectTrigger className="w-full sm:w-36">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -360,7 +360,7 @@ export default function Invoices() {
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={openCreateForm}>
+          <Button onClick={openCreateForm} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Create Invoice
           </Button>
@@ -368,19 +368,20 @@ export default function Invoices() {
 
         {/* Invoices Table */}
         <div className="bg-card rounded-xl border border-border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="font-semibold">Invoice #</TableHead>
-                <TableHead className="font-semibold">Patient</TableHead>
-                <TableHead className="font-semibold">Date</TableHead>
-                <TableHead className="font-semibold text-right">Total</TableHead>
-                <TableHead className="font-semibold text-right">Paid</TableHead>
-                <TableHead className="font-semibold text-right">Balance</TableHead>
-                <TableHead className="font-semibold">Status</TableHead>
-                <TableHead className="font-semibold text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="font-semibold whitespace-nowrap">Invoice #</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap">Patient</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap">Date</TableHead>
+                  <TableHead className="font-semibold text-right whitespace-nowrap">Total</TableHead>
+                  <TableHead className="font-semibold text-right whitespace-nowrap">Paid</TableHead>
+                  <TableHead className="font-semibold text-right whitespace-nowrap">Balance</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap">Status</TableHead>
+                  <TableHead className="font-semibold text-right whitespace-nowrap">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
             <TableBody>
               {currentPageInvoices.length === 0 ? (
                 <TableRow>
@@ -865,6 +866,7 @@ export default function Invoices() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+        </div>
       </div>
     </TooltipProvider>
   );

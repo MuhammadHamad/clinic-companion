@@ -492,59 +492,59 @@ export default function Inventory() {
       <div className="min-h-screen">
         <Header title="Inventory" subtitle="Manage your stock and supplies" />
       
-      <div className="p-6 space-y-6 animate-fade-in">
+      <div className="p-4 sm:p-6 space-y-6 animate-fade-in">
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
-            <CardContent className="p-4 flex items-center gap-4">
+            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
               <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
                 <Package className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Items</p>
-                <p className="text-xl font-bold">{stats.total}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Total Items</p>
+                <p className="text-lg sm:text-xl font-bold">{stats.total}</p>
               </div>
             </CardContent>
           </Card>
           <Card className={stats.low_stock > 0 ? 'border-warning/50' : ''}>
-            <CardContent className="p-4 flex items-center gap-4">
+            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
               <div className="h-10 w-10 rounded-lg bg-warning/10 flex items-center justify-center">
                 <AlertTriangle className="h-5 w-5 text-warning" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Low Stock</p>
-                <p className="text-xl font-bold text-warning">{stats.low_stock}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Low Stock</p>
+                <p className="text-lg sm:text-xl font-bold text-warning">{stats.low_stock}</p>
               </div>
             </CardContent>
           </Card>
           <Card className={stats.out_of_stock > 0 ? 'border-destructive/50' : ''}>
-            <CardContent className="p-4 flex items-center gap-4">
+            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
               <div className="h-10 w-10 rounded-lg bg-destructive/10 flex items-center justify-center">
                 <AlertTriangle className="h-5 w-5 text-destructive" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Out of Stock</p>
-                <p className="text-xl font-bold text-destructive">{stats.out_of_stock}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Out of Stock</p>
+                <p className="text-lg sm:text-xl font-bold text-destructive">{stats.out_of_stock}</p>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-4 flex items-center gap-4">
+            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
               <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center">
                 <Package className="h-5 w-5 text-success" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Value</p>
-                <p className="text-xl font-bold">Rs. {stats.total_value.toLocaleString()}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Total Value</p>
+                <p className="text-lg sm:text-xl font-bold">Rs. {stats.total_value.toLocaleString()}</p>
               </div>
             </CardContent>
           </Card>
         </div>
 
         {/* Actions Bar */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-between">
-          <div className="flex gap-3 flex-1 flex-wrap">
-            <div className="relative flex-1 max-w-md min-w-[200px]">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search items..."
@@ -554,7 +554,7 @@ export default function Inventory() {
               />
             </div>
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full sm:w-40">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
@@ -577,12 +577,12 @@ export default function Inventory() {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setIsCategoryDialogOpen(true)}>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setIsCategoryDialogOpen(true)} className="w-full sm:w-auto">
               <List className="h-4 w-4 mr-2" />
               Manage Categories
             </Button>
-            <Button onClick={openCreateForm}>
+            <Button onClick={openCreateForm} className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               Add Item
             </Button>
@@ -591,19 +591,20 @@ export default function Inventory() {
 
         {/* Items Table */}
         <div className="bg-card rounded-xl border border-border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="font-semibold text-center w-16">#</TableHead>
-                <TableHead className="font-semibold">Item Name</TableHead>
-                <TableHead className="font-semibold">Category</TableHead>
-                <TableHead className="font-semibold text-center">Current Qty</TableHead>
-                <TableHead className="font-semibold text-center">Min Threshold</TableHead>
-                <TableHead className="font-semibold text-right">Unit Cost</TableHead>
-                <TableHead className="font-semibold">Status</TableHead>
-                <TableHead className="font-semibold text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="font-semibold text-center w-16 whitespace-nowrap">#</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap">Item Name</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap">Category</TableHead>
+                  <TableHead className="font-semibold text-center whitespace-nowrap">Current Qty</TableHead>
+                  <TableHead className="font-semibold text-center whitespace-nowrap">Min Threshold</TableHead>
+                  <TableHead className="font-semibold text-right whitespace-nowrap">Unit Cost</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap">Status</TableHead>
+                  <TableHead className="font-semibold text-right whitespace-nowrap">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
             <TableBody>
               {currentPageItems.length === 0 ? (
                 <TableRow>
@@ -1219,6 +1220,7 @@ export default function Inventory() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        </div>
       </div>
     </TooltipProvider>
   );

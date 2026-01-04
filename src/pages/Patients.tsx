@@ -561,11 +561,11 @@ export default function Patients() {
       <div className="min-h-screen">
         <Header title="Patients" subtitle="Manage your patient records" />
       
-      <div className="p-6 space-y-6 animate-fade-in">
+      <div className="p-4 sm:p-6 space-y-6 animate-fade-in">
         {/* Actions Bar */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-between">
-          <div className="flex gap-3 flex-1">
-            <div className="relative flex-1 max-w-md">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by name, phone, or patient #..."
@@ -575,7 +575,7 @@ export default function Patients() {
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-36">
+              <SelectTrigger className="w-full sm:w-36">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -587,7 +587,7 @@ export default function Patients() {
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={openCreateForm}>
+          <Button onClick={openCreateForm} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Add Patient
           </Button>
@@ -595,19 +595,20 @@ export default function Patients() {
 
         {/* Patients Table */}
         <div className="bg-card rounded-xl border border-border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="font-semibold">Patient #</TableHead>
-                <TableHead className="font-semibold">Name</TableHead>
-                <TableHead className="font-semibold">Age</TableHead>
-                <TableHead className="font-semibold">Phone</TableHead>
-                <TableHead className="font-semibold">Last Visit</TableHead>
-                <TableHead className="font-semibold">Balance</TableHead>
-                <TableHead className="font-semibold">Status</TableHead>
-                <TableHead className="font-semibold text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="font-semibold whitespace-nowrap">Patient #</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap">Name</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap">Age</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap">Phone</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap">Last Visit</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap">Balance</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap">Status</TableHead>
+                  <TableHead className="font-semibold text-right whitespace-nowrap">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
             <TableBody>
               {currentPagePatients.length === 0 ? (
                 <TableRow>
@@ -1631,6 +1632,7 @@ export default function Patients() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        </div>
       </div>
     </TooltipProvider>
   );

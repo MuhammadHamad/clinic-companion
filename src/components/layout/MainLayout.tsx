@@ -41,8 +41,8 @@ export function MainLayout() {
         onLogout={handleLogout} 
         user={userInfo} 
       />
-      <main className="pl-64">
-        <div className="min-h-screen">
+      <main className="lg:pl-64">
+        <div className="min-h-screen pt-16 lg:pt-0">
           <Outlet />
         </div>
       </main>

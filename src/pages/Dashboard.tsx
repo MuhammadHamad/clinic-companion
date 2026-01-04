@@ -68,11 +68,11 @@ export default function Dashboard() {
     <div className="min-h-screen">
       <Header title="Dashboard" subtitle="Welcome back! Here's what's happening today." />
       
-      <div className="p-6 space-y-6 animate-fade-in">
+      <div className="p-4 sm:p-6 space-y-6 animate-fade-in">
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="stat-card">
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="card-stat-label">Today's Revenue</p>
@@ -92,7 +92,7 @@ export default function Dashboard() {
           </Card>
 
           <Card className="stat-card">
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="card-stat-label">Today's Appointments</p>
