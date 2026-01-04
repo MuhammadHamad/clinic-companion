@@ -5,14 +5,14 @@ export const patientSchema = z.object({
   first_name: z.string()
     .min(1, 'First name is required')
     .max(50, 'First name must be less than 50 characters')
-    .regex(/^[a-zA-Z\s-']+$/, 'First name can only contain letters, spaces, hyphens, and apostrophes'),
+    .regex(/^[a-zA-Z\s'-]+$/, 'First name can only contain letters, spaces, hyphens, and apostrophes'),
   last_name: z.string()
     .min(1, 'Last name is required')
     .max(50, 'Last name must be less than 50 characters')
-    .regex(/^[a-zA-Z\s-']+$/, 'Last name can only contain letters, spaces, hyphens, and apostrophes'),
+    .regex(/^[a-zA-Z\s'-]+$/, 'Last name can only contain letters, spaces, hyphens, and apostrophes'),
   phone: z.string()
     .min(1, 'Phone number is required')
-    .regex(/^[+]?[\d\s()-]+$/, 'Please enter a valid phone number')
+    .regex(/^[\d\s\-\+\(\)]+$/, 'Please enter a valid phone number')
     .min(10, 'Phone number must be at least 10 digits'),
   email: z.string()
     .email('Please enter a valid email address')
@@ -30,10 +30,39 @@ export const patientSchema = z.object({
     .max(200, 'Address must be less than 200 characters')
     .optional()
     .or(z.literal('')),
+  city: z.string()
+    .max(100, 'City must be less than 100 characters')
+    .optional()
+    .or(z.literal('')),
   gender: z.enum(['male', 'female', 'other'])
-    .optional(),
+    .optional()
+    .or(z.literal('')),
   patient_number: z.string()
     .max(20, 'Patient number must be less than 20 characters')
+    .optional()
+    .or(z.literal('')),
+  emergency_contact_name: z.string()
+    .max(100, 'Emergency contact name must be less than 100 characters')
+    .optional()
+    .or(z.literal('')),
+  emergency_contact_phone: z.string()
+    .regex(/^[\d\s\-\+\(\)]*$/, 'Please enter a valid emergency contact phone number')
+    .optional()
+    .or(z.literal('')),
+  allergies: z.string()
+    .max(500, 'Allergies must be less than 500 characters')
+    .optional()
+    .or(z.literal('')),
+  current_medications: z.string()
+    .max(500, 'Current medications must be less than 500 characters')
+    .optional()
+    .or(z.literal('')),
+  medical_conditions: z.string()
+    .max(500, 'Medical conditions must be less than 500 characters')
+    .optional()
+    .or(z.literal('')),
+  notes: z.string()
+    .max(1000, 'Notes must be less than 1000 characters')
     .optional()
     .or(z.literal('')),
 });
@@ -55,19 +84,18 @@ export const invoiceSchema = z.object({
   }))
     .min(1, 'At least one item is required')
     .max(50, 'Cannot have more than 50 items'),
-  invoice_date: z.string()
-    .min(1, 'Invoice date is required'),
-  due_date: z.string()
-    .min(1, 'Due date is required')
-    .refine((date) => {
-      const due = new Date(date);
-      const today = new Date();
-      return due >= today;
-    }, 'Due date must be today or in the future'),
+  discount_amount: z.number()
+    .min(0, 'Discount amount must be positive')
+    .max(999999, 'Discount amount must be less than 1,000,000'),
+  tax_amount: z.number()
+    .min(0, 'Tax amount must be positive')
+    .max(999999, 'Tax amount must be less than 1,000,000'),
+  payment_terms: z.string()
+    .max(100, 'Payment terms must be less than 100 characters')
+    .optional(),
   notes: z.string()
     .max(500, 'Notes must be less than 500 characters')
-    .optional()
-    .or(z.literal('')),
+    .optional(),
 });
 
 // Payment form validation schema

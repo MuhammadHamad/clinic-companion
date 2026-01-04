@@ -415,7 +415,23 @@ export default function Patients() {
     setDuplicatePatientInfo(null);
     setDuplicatePatientWarningForPhone(null);
     setIsSubmitting(true);
-    await createPatientFromForm();
+    
+    const result = await createPatientFromForm();
+    
+    if (result.success) {
+      toast({
+        title: 'Patient Created',
+        description: `${formData.first_name} ${formData.last_name} has been registered successfully`,
+      });
+      setIsFormOpen(false);
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error || 'Failed to create patient',
+        variant: 'destructive',
+      });
+    }
+    
     setIsSubmitting(false);
   };
 
