@@ -6,55 +6,64 @@
 
 @layer base {
   :root {
-    --background: 222 22% 11%;
-    --foreground: 210 40% 98%;
+    --background: 218 32% 15%;
+    --foreground: 0 0% 100%;
 
-    --card: 222 20% 15%;
-    --card-foreground: 210 40% 98%;
+    --card: 217 22% 20%;
+    --card-foreground: 0 0% 100%;
 
-    --popover: 222 20% 15%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 217 22% 20%;
+    --popover-foreground: 0 0% 100%;
 
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 29 100% 63%;
+    --primary-foreground: 217 37% 9%;
+    --primary-hover: 30 100% 70%;
+    --primary-active: 30 100% 55%;
 
-    --secondary: 222 18% 18%;
-    --secondary-foreground: 210 30% 96%;
+    --secondary: 217 37% 9%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 220 16% 20%;
-    --muted-foreground: 220 10% 60%;
+    --muted: 217 33% 27%;
+    --muted-foreground: 220 19% 63%;
 
-    --accent: 217 65% 35%;
-    --accent-foreground: 210 40% 98%;
+    --text-muted: 217 18% 44%;
 
-    --destructive: 0 72% 55%;
+    --accent: 218 29% 24%;
+    --accent-foreground: 0 0% 100%;
+
+    --accent-blue: 217 91% 60%;
+    --accent-blue-hover: 216 91% 64%;
+
+    --destructive: 344 100% 62%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 160 84% 39%;
+    --success: 160 100% 42%;
     --success-foreground: 0 0% 100%;
 
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 220 18% 22%;
-    --input: 220 18% 22%;
-    --ring: 217 91% 60%;
+    --border: 217 33% 27%;
+    --input: 217 33% 27%;
+    --ring: 29 100% 63%;
+
+    --border-hover: 216 30% 34%;
 
     --radius: 0.5rem;
 
-    --sidebar-background: 220 25% 8%;
-    --sidebar-foreground: 220 10% 90%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 20% 14%;
-    --sidebar-accent-foreground: 220 10% 90%;
-    --sidebar-border: 220 20% 18%;
-    --sidebar-ring: 217 91% 60%;
-    --sidebar-muted: 220 10% 60%;
+    --sidebar-background: 217 37% 9%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 29 100% 63%;
+    --sidebar-primary-foreground: 217 37% 9%;
+    --sidebar-accent: 218 29% 24%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 217 33% 27%;
+    --sidebar-ring: 29 100% 63%;
+    --sidebar-muted: 220 19% 63%;
 
     /* Chart colors */
-    --chart-1: 217 91% 60%;
-    --chart-2: 160 84% 39%;
+    --chart-1: 29 100% 63%;
+    --chart-2: 160 100% 42%;
     --chart-3: 38 92% 55%;
     --chart-4: 280 65% 62%;
     --chart-5: 340 80% 60%;
@@ -74,43 +83,55 @@
   }
 
   .dark {
-    --background: 220 20% 10%;
-    --foreground: 220 10% 98%;
+    --background: 218 32% 15%;
+    --foreground: 0 0% 100%;
 
-    --card: 220 20% 14%;
-    --card-foreground: 220 10% 98%;
+    --card: 217 22% 20%;
+    --card-foreground: 0 0% 100%;
 
-    --popover: 220 20% 14%;
-    --popover-foreground: 220 10% 98%;
+    --popover: 217 22% 20%;
+    --popover-foreground: 0 0% 100%;
 
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 29 100% 63%;
+    --primary-foreground: 217 37% 9%;
+    --primary-hover: 30 100% 70%;
+    --primary-active: 30 100% 55%;
 
-    --secondary: 220 15% 20%;
-    --secondary-foreground: 220 10% 90%;
+    --secondary: 217 37% 9%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 220 15% 20%;
-    --muted-foreground: 220 10% 55%;
+    --muted: 217 33% 27%;
+    --muted-foreground: 220 19% 63%;
 
-    --accent: 220 15% 20%;
-    --accent-foreground: 220 10% 90%;
+    --text-muted: 217 18% 44%;
 
-    --destructive: 0 62% 50%;
+    --accent: 218 29% 24%;
+    --accent-foreground: 0 0% 100%;
+
+    --accent-blue: 217 91% 60%;
+    --accent-blue-hover: 216 91% 64%;
+
+    --destructive: 344 100% 62%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 15% 22%;
-    --input: 220 15% 22%;
-    --ring: 217 91% 60%;
+    --success: 160 100% 42%;
+    --success-foreground: 0 0% 100%;
 
-    --sidebar-background: 220 25% 8%;
-    --sidebar-foreground: 220 10% 90%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 20% 14%;
-    --sidebar-accent-foreground: 220 10% 90%;
-    --sidebar-border: 220 20% 14%;
-    --sidebar-ring: 217 91% 60%;
-    --sidebar-muted: 220 10% 50%;
+    --border: 217 33% 27%;
+    --input: 217 33% 27%;
+    --ring: 29 100% 63%;
+
+    --border-hover: 216 30% 34%;
+
+    --sidebar-background: 217 37% 9%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 29 100% 63%;
+    --sidebar-primary-foreground: 217 37% 9%;
+    --sidebar-accent: 218 29% 24%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 217 33% 27%;
+    --sidebar-ring: 29 100% 63%;
+    --sidebar-muted: 220 19% 63%;
   }
 }
 
@@ -135,15 +156,40 @@
   }
 
   .glass-card {
-    @apply bg-card/80 backdrop-blur-sm border border-border/50 shadow-sm;
+    @apply bg-card/80 backdrop-blur-md border border-border/60 shadow-sm;
   }
 
   .stat-card {
-    @apply bg-card rounded-xl border border-border p-6 shadow-sm transition-all duration-200 hover:shadow-md hover:border-primary/20;
+    background-image: linear-gradient(135deg, #2d3f56 0%, #1f2d3f 100%);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    @apply rounded-lg border border-border p-6 transition-all duration-200;
+  }
+
+  .stat-card:hover {
+    background-image: linear-gradient(135deg, #344a63 0%, #243447 100%);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    transform: scale(1.02);
+    border-color: hsl(var(--border-hover));
+  }
+
+  .ventor-card {
+    background-image: linear-gradient(135deg, #2d3f56 0%, #1f2d3f 100%);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .ventor-card:hover {
+    background-image: linear-gradient(135deg, #344a63 0%, #243447 100%);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    border-color: hsl(var(--border-hover));
+  }
+
+  .table-surface {
+    background-color: hsl(var(--secondary));
+    border-color: hsl(var(--border));
   }
 
   .data-table-row {
-    @apply border-b border-border/50 hover:bg-muted/50 transition-colors;
+    @apply border-b border-border/50 hover:bg-[hsl(var(--card)/0.65)] transition-colors;
   }
 
   .sidebar-item {
@@ -245,7 +291,131 @@
     display: block !important;
   }
 
+  html, body {
+    height: auto !important;
+  }
+
   body {
     background: white;
+    color: #111827;
+    margin: 0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
+
+  /* Statement-only printing mode */
+  body.printing-statement #root,
+  body.statement-open #root {
+    display: none !important;
+  }
+
+  body.printing-statement *,
+  body.statement-open * {
+    visibility: hidden !important;
+  }
+
+  body.printing-statement .patient-statement-print,
+  body.statement-open .patient-statement-print,
+  body.printing-statement .patient-statement-print *,
+  body.statement-open .patient-statement-print * {
+    visibility: visible !important;
+  }
+
+  body.printing-statement .bg-black\/80,
+  body.statement-open .bg-black\/80 {
+    display: none !important;
+  }
+
+  body.printing-statement .patient-statement-print,
+  body.statement-open .patient-statement-print {
+    display: block !important;
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+    translate: none !important;
+    margin: 0 !important;
+    border: 0 !important;
+    page-break-before: auto !important;
+    break-before: auto !important;
+  }
+
+  /* Patient statement layout */
+  body.printing-statement .patient-statement-print,
+  body.statement-open .patient-statement-print {
+    background: #ffffff !important;
+    color: #111827 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    max-width: none !important;
+    width: 100% !important;
+    padding: 2.5rem !important;
+    font-size: 12pt !important;
+    line-height: 1.35 !important;
+  }
+
+  /* Force readable typography inside the statement */
+  body.printing-statement .patient-statement-print .text-muted-foreground,
+  body.statement-open .patient-statement-print .text-muted-foreground {
+    color: #4b5563 !important; /* gray-600 */
+  }
+
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+
+  body.printing-statement .patient-statement-card,
+  body.statement-open .patient-statement-card {
+    background: #ffffff !important;
+    border-color: #e5e7eb !important; /* gray-200 */
+  }
+
+  body.printing-statement .patient-statement-table-wrapper,
+  body.statement-open .patient-statement-table-wrapper {
+    background: #ffffff !important;
+    border-color: #e5e7eb !important;
+  }
+
+  body.printing-statement .patient-statement-table thead tr,
+  body.statement-open .patient-statement-table thead tr {
+    background: #f3f4f6 !important; /* gray-100 */
+  }
+
+  body.printing-statement .patient-statement-table thead,
+  body.statement-open .patient-statement-table thead {
+    display: table-header-group;
+  }
+
+  body.printing-statement .patient-statement-table tr,
+  body.statement-open .patient-statement-table tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  body.printing-statement .patient-statement-table th,
+  body.statement-open .patient-statement-table th {
+    color: #374151 !important; /* gray-700 */
+    font-weight: 600 !important;
+  }
+
+  body.printing-statement .patient-statement-table td,
+  body.statement-open .patient-statement-table td {
+    color: #111827 !important; /* gray-900 */
+  }
+
+  /* Remove interactive controls (buttons, close icons) from the PDF */
+  body.printing-statement .patient-statement-print button,
+  body.statement-open .patient-statement-print button {
+    display: none !important;
+  }
+}
+
+/* Hide Radix dialog close icon for patient statement (use footer Close button instead) */
+.patient-statement-print > button.absolute.right-4.top-4 {
+  display: none;
 }

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -54,6 +55,7 @@ import { useTreatmentTypes } from '@/hooks/useTreatmentTypes';
 import { Invoice, InvoiceItem, InvoiceStatus, PaymentMethod } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const statusColors: Record<InvoiceStatus, string> = {
   draft: 'bg-muted text-muted-foreground',
@@ -67,6 +69,8 @@ export default function Invoices() {
   const { invoices, isLoading, fetchInvoices, createInvoice, recordPayment, deleteInvoice } = useInvoices();
   const { patients } = usePatients();
   const { treatmentTypes } = useTreatmentTypes();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -74,6 +78,10 @@ export default function Invoices() {
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const { toast } = useToast();
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
 
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
@@ -102,13 +110,32 @@ export default function Invoices() {
   const filteredInvoices = invoices.filter(invoice => {
     const matchesSearch = 
       invoice.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      invoice.patient?.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      invoice.patient?.last_name.toLowerCase().includes(searchQuery.toLowerCase());
+      (invoice.patient?.first_name && invoice.patient.first_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (invoice.patient?.last_name && invoice.patient.last_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (invoice.patient?.phone && invoice.patient.phone.includes(searchQuery));
     
     const matchesStatus = statusFilter === 'all' || invoice.status === statusFilter;
     
     return matchesSearch && matchesStatus;
   });
+
+  // Pagination calculations
+  const totalInvoices = filteredInvoices.length;
+  const totalPages = Math.ceil(totalInvoices / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalInvoices);
+  const currentPageInvoices = filteredInvoices.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get('q');
+    if (q && q !== searchQuery) setSearchQuery(q);
+  }, [location.search, searchQuery]);
 
   const openCreateForm = () => {
     setFormData({
@@ -121,6 +148,25 @@ export default function Invoices() {
     });
     setIsFormOpen(true);
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const patientId = params.get('patientId');
+    if (!patientId) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      patient_id: patientId,
+      items: prev.items?.length
+        ? prev.items
+        : [{ id: '1', invoice_id: '', description: '', tooth_number: '', quantity: 1, unit_price: 0, total: 0 }],
+    }));
+    setIsFormOpen(true);
+
+    params.delete('patientId');
+    const nextSearch = params.toString();
+    navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : '' }, { replace: true });
+  }, [location.pathname, location.search, navigate]);
 
   const openViewDialog = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
@@ -279,8 +325,8 @@ export default function Invoices() {
         <Card className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground">
           <CardContent className="p-6 flex items-center justify-between">
             <div>
-              <p className="text-sm opacity-80">Total Outstanding</p>
-              <p className="text-3xl font-bold">Rs. {totalOutstanding.toLocaleString()}</p>
+              <p className="text-sm text-foreground opacity-80">Total Outstanding</p>
+              <p className="text-3xl font-bold text-foreground">Rs. {totalOutstanding.toLocaleString()}</p>
             </div>
             <DollarSign className="h-12 w-12 opacity-20" />
           </CardContent>
@@ -334,14 +380,14 @@ export default function Invoices() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredInvoices.length === 0 ? (
+              {currentPageInvoices.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
-                    No invoices found
+                    {totalInvoices === 0 ? 'No invoices found' : 'No invoices on this page'}
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredInvoices.map((invoice) => (
+                currentPageInvoices.map((invoice) => (
                   <TableRow key={invoice.id} className="data-table-row">
                     <TableCell className="font-medium text-primary">{invoice.invoice_number}</TableCell>
                     <TableCell>
@@ -403,6 +449,18 @@ export default function Invoices() {
             </TableBody>
           </Table>
         </div>
+
+        {/* Pagination */}
+        {totalInvoices > 0 && (
+          <DataTablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            startIndex={startIndex}
+            endIndex={endIndex}
+            totalItems={totalInvoices}
+            onPageChange={setCurrentPage}
+          />
+        )}
       </div>
 
       {/* Create Invoice Dialog */}

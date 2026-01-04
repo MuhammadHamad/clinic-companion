@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Table,
@@ -55,6 +56,7 @@ import { useInventory } from '@/hooks/useInventory';
 import { InventoryItem, InventoryCategory, InventoryStatus, MovementType } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { useLocation } from 'react-router-dom';
 
 const statusColors: Record<InventoryStatus, string> = {
   in_stock: 'bg-success/10 text-success border-success/20',
@@ -70,6 +72,7 @@ const statusLabels: Record<InventoryStatus, string> = {
 
 export default function Inventory() {
   const { items, categories, isLoading, fetchItems, createItem, updateItem, recordMovement, deleteItem, createCategory, updateCategory, deleteCategory } = useInventory();
+  const location = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -79,9 +82,21 @@ export default function Inventory() {
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const { toast } = useToast();
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitLockRef = useRef(false);
+
+  const [duplicateItemWarningKey, setDuplicateItemWarningKey] = useState<string | null>(null);
+
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  const [duplicateItemInfo, setDuplicateItemInfo] = useState<InventoryItem | null>(null);
 
   // Category management state
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
@@ -97,7 +112,6 @@ export default function Inventory() {
 
   const [formData, setFormData] = useState({
     item_name: '',
-    item_code: '',
     category_id: '',
     unit_of_measure: '',
     current_quantity: 0,
@@ -123,9 +137,7 @@ export default function Inventory() {
   };
 
   const filteredItems = items.filter(item => {
-    const matchesSearch = 
-      item.item_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.item_code?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = item.item_name.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesCategory = categoryFilter === 'all' || item.category_id === categoryFilter;
     const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
@@ -133,11 +145,41 @@ export default function Inventory() {
     return matchesSearch && matchesCategory && matchesStatus;
   });
 
+  // Pagination calculations
+  const totalItems = filteredItems.length;
+  const totalPages = Math.ceil(totalItems / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+  const currentPageItems = filteredItems.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, categoryFilter, statusFilter]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get('q');
+    if (q && q !== searchQuery) setSearchQuery(q);
+  }, [location.search, searchQuery]);
+
+  const generateItemCode = () => {
+    try {
+      // Prefer UUID when available
+      const uuid = (globalThis as any).crypto?.randomUUID?.();
+      if (uuid) return `ITM-${uuid}`;
+    } catch {
+      // ignore
+    }
+    const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+    const ts = Date.now().toString(36).toUpperCase();
+    return `ITM-${ts}-${rand}`;
+  };
+
   const openCreateForm = () => {
     setFormMode('create');
     setFormData({
       item_name: '',
-      item_code: `ITM-${String(items.length + 1).padStart(3, '0')}`,
       category_id: '',
       unit_of_measure: '',
       current_quantity: 0,
@@ -147,6 +189,7 @@ export default function Inventory() {
       supplier_contact: '',
       expiry_date: '',
     });
+    setDuplicateItemWarningKey(null);
     setIsFormOpen(true);
   };
 
@@ -155,7 +198,6 @@ export default function Inventory() {
     setSelectedItem(item);
     setFormData({
       item_name: item.item_name,
-      item_code: item.item_code || '',
       category_id: item.category_id || '',
       unit_of_measure: item.unit_of_measure,
       current_quantity: item.current_quantity,
@@ -165,6 +207,7 @@ export default function Inventory() {
       supplier_contact: item.supplier_contact || '',
       expiry_date: item.expiry_date || '',
     });
+    setDuplicateItemWarningKey(null);
     setIsFormOpen(true);
   };
 
@@ -185,19 +228,8 @@ export default function Inventory() {
     return 'in_stock';
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.item_name || !formData.unit_of_measure || !formData.category_id) {
-      toast({
-        title: 'Validation Error',
-        description: 'Please fill in all required fields',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const result = formMode === 'create' 
+  const submitInventoryForm = async () => {
+    const result = formMode === 'create'
       ? await createItem(formData)
       : await updateItem(selectedItem!.id, formData);
 
@@ -205,7 +237,7 @@ export default function Inventory() {
       setIsFormOpen(false);
       toast({
         title: formMode === 'create' ? 'Item Added' : 'Item Updated',
-        description: formMode === 'create' 
+        description: formMode === 'create'
           ? `${formData.item_name} has been added to inventory`
           : 'Inventory item has been updated successfully',
       });
@@ -215,6 +247,55 @@ export default function Inventory() {
         description: result.error,
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+
+    if (isSubmitting) {
+      submitLockRef.current = false;
+      return;
+    }
+    
+    if (!formData.item_name || !formData.unit_of_measure || !formData.category_id) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please fill in all required fields',
+        variant: 'destructive',
+      });
+      submitLockRef.current = false;
+      return;
+    }
+
+    if (formMode === 'create') {
+      const key = `${formData.item_name.trim().toLowerCase()}|${formData.category_id}|${formData.unit_of_measure}`;
+      const existing = items.find(
+        (i) =>
+          i.item_name.trim().toLowerCase() === formData.item_name.trim().toLowerCase() &&
+          i.category_id === formData.category_id &&
+          i.unit_of_measure === formData.unit_of_measure
+      );
+
+      if (existing && duplicateItemWarningKey !== key) {
+        setDuplicateItemWarningKey(key);
+        setDuplicateItemInfo(existing);
+        setDuplicateModalOpen(true);
+        setIsSubmitting(false);
+        submitLockRef.current = false;
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+    try {
+      await submitInventoryForm();
+    } finally {
+      setIsSubmitting(false);
+      submitLockRef.current = false;
     }
   };
 
@@ -245,6 +326,27 @@ export default function Inventory() {
     }
 
     setIsDeleting(false);
+  };
+
+  const handleDuplicateConfirm = async () => {
+    setDuplicateModalOpen(false);
+    setDuplicateItemInfo(null);
+    setDuplicateItemWarningKey(null);
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+    setIsSubmitting(true);
+    try {
+      await submitInventoryForm();
+    } finally {
+      setIsSubmitting(false);
+      submitLockRef.current = false;
+    }
+  };
+
+  const handleDuplicateCancel = () => {
+    setDuplicateModalOpen(false);
+    setDuplicateItemInfo(null);
+    setDuplicateItemWarningKey(null);
   };
 
   const handleCreateCategory = async (e: React.FormEvent) => {
@@ -489,9 +591,9 @@ export default function Inventory() {
         <div className="bg-card rounded-xl border border-border overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="font-semibold">Item Code</TableHead>
-                <TableHead className="font-semibold">Name</TableHead>
+              <TableRow>
+                <TableHead className="font-semibold text-center w-16">#</TableHead>
+                <TableHead className="font-semibold">Item Name</TableHead>
                 <TableHead className="font-semibold">Category</TableHead>
                 <TableHead className="font-semibold text-center">Current Qty</TableHead>
                 <TableHead className="font-semibold text-center">Min Threshold</TableHead>
@@ -501,36 +603,48 @@ export default function Inventory() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredItems.length === 0 ? (
+              {currentPageItems.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-12">
-                    {categories.length === 0 ? (
-                      <div className="space-y-4">
-                        <Package className="h-12 w-12 mx-auto text-muted-foreground" />
-                        <div>
-                          <h3 className="font-semibold text-lg">No categories found</h3>
-                          <p className="text-muted-foreground mb-2">
-                            Create your first category to start organizing inventory items
-                          </p>
-                          <p className="text-sm text-muted-foreground mb-4">
-                            Examples: Instruments, Materials, Consumables, Medications, Equipment
-                          </p>
-                          <Button 
-                            onClick={() => setIsCategoryDialogOpen(true)}
-                            className="mx-auto"
-                          >
-                            <List className="h-4 w-4 mr-2" />
-                            Create Your First Category
-                          </Button>
+                    {totalItems === 0 ? (
+                      categories.length === 0 ? (
+                        <div className="space-y-4">
+                          <Package className="h-12 w-12 mx-auto text-muted-foreground" />
+                          <div>
+                            <h3 className="font-semibold text-lg">No categories found</h3>
+                            <p className="text-muted-foreground mb-2">
+                              Create your first category to start organizing inventory items
+                            </p>
+                            <p className="text-sm text-muted-foreground mb-4">
+                              Examples: Instruments, Materials, Consumables, Medications, Equipment
+                            </p>
+                            <Button 
+                              onClick={() => setIsCategoryDialogOpen(true)}
+                              className="mx-auto"
+                            >
+                              <List className="h-4 w-4 mr-2" />
+                              Create Your First Category
+                            </Button>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <Package className="h-12 w-12 mx-auto text-muted-foreground" />
+                          <div>
+                            <h3 className="font-semibold text-lg">No items found</h3>
+                            <p className="text-muted-foreground">
+                              Get started by adding your first inventory item
+                            </p>
+                          </div>
+                        </div>
+                      )
                     ) : (
                       <div className="space-y-4">
                         <Package className="h-12 w-12 mx-auto text-muted-foreground" />
                         <div>
-                          <h3 className="font-semibold text-lg">No items found</h3>
+                          <h3 className="font-semibold text-lg">No items on this page</h3>
                           <p className="text-muted-foreground">
-                            Get started by adding your first inventory item
+                            Try adjusting your filters or go to a different page
                           </p>
                         </div>
                       </div>
@@ -538,9 +652,11 @@ export default function Inventory() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredItems.map((item) => (
+                currentPageItems.map((item, index) => (
                   <TableRow key={item.id} className="data-table-row">
-                    <TableCell className="font-medium text-primary">{item.item_code}</TableCell>
+                    <TableCell className="text-center text-muted-foreground font-medium">
+                      {startIndex + index + 1}
+                    </TableCell>
                     <TableCell>
                       <div className="font-medium">{item.item_name}</div>
                       <div className="text-sm text-muted-foreground">{item.unit_of_measure}</div>
@@ -596,6 +712,18 @@ export default function Inventory() {
             </TableBody>
           </Table>
         </div>
+
+        {/* Pagination */}
+        {totalItems > 0 && (
+          <DataTablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            startIndex={startIndex}
+            endIndex={endIndex}
+            totalItems={totalItems}
+            onPageChange={setCurrentPage}
+          />
+        )}
       </div>
 
       {/* Create/Edit Item Dialog */}
@@ -617,14 +745,6 @@ export default function Inventory() {
                   onChange={(e) => setFormData({...formData, item_name: e.target.value})}
                   placeholder="Enter item name"
                   required
-                />
-              </div>
-              <div>
-                <label className="form-label">Item Code</label>
-                <Input
-                  value={formData.item_code}
-                  onChange={(e) => setFormData({...formData, item_code: e.target.value})}
-                  placeholder="ITM-001"
                 />
               </div>
               <div>
@@ -733,8 +853,8 @@ export default function Inventory() {
               <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">
-                {formMode === 'create' ? 'Add Item' : 'Save Changes'}
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Saving…' : (formMode === 'create' ? 'Add Item' : 'Save Changes')}
               </Button>
             </DialogFooter>
           </form>
@@ -1014,6 +1134,55 @@ export default function Inventory() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Duplicate Item Confirmation Modal */}
+      <Dialog
+        open={duplicateModalOpen}
+        onOpenChange={(open) => {
+          setDuplicateModalOpen(open);
+          if (!open) {
+            setDuplicateItemInfo(null);
+            setDuplicateItemWarningKey(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Possible Duplicate Item</DialogTitle>
+            <DialogDescription>
+              An item with the same name, category, and unit of measure already exists.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {duplicateItemInfo && (
+            <div className="p-4 bg-muted/50 rounded-lg space-y-2">
+              <h4 className="font-medium text-sm">Existing Item:</h4>
+              <div className="text-sm space-y-1">
+                <div><span className="font-medium">Name:</span> {duplicateItemInfo.item_name}</div>
+                <div><span className="font-medium">Category:</span> {duplicateItemInfo.category?.name || '-'}</div>
+                <div><span className="font-medium">Unit:</span> {duplicateItemInfo.unit_of_measure}</div>
+                <div><span className="font-medium">Current Quantity:</span> {duplicateItemInfo.current_quantity}</div>
+                {duplicateItemInfo.unit_cost && (
+                  <div><span className="font-medium">Unit Cost:</span> Rs. {duplicateItemInfo.unit_cost.toLocaleString()}</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="text-sm text-muted-foreground">
+            If this represents the same product, consider updating its quantity instead of creating a new item.
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleDuplicateCancel}>
+              Cancel
+            </Button>
+            <Button onClick={handleDuplicateConfirm}>
+              Create Anyway
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

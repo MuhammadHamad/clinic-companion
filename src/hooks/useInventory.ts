@@ -9,6 +9,18 @@ export function useInventory() {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
+  const generateItemCode = () => {
+    try {
+      const uuid = (globalThis as any).crypto?.randomUUID?.();
+      if (uuid) return `ITM-${uuid}`;
+    } catch {
+      // ignore
+    }
+    const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+    const ts = Date.now().toString(36).toUpperCase();
+    return `ITM-${ts}-${rand}`;
+  };
+
   const mapRowToItem = (item: any): InventoryItem => ({
     id: item.id,
     category_id: item.category_id,
@@ -146,29 +158,48 @@ export function useInventory() {
     }
   }, [toast]);
 
-  const createItem = async (itemData: Omit<InventoryItem, 'id' | 'status' | 'created_at' | 'category'>) => {
+  const createItem = async (itemData: Omit<InventoryItem, 'id' | 'status' | 'created_at' | 'category' | 'item_code'>) => {
     try {
-      const { data, error } = await supabase
-        .from('inventory_items')
-        .insert({
-          item_name: itemData.item_name,
-          item_code: itemData.item_code || null,
-          category_id: itemData.category_id || null,
-          unit_of_measure: itemData.unit_of_measure,
-          current_quantity: itemData.current_quantity,
-          minimum_threshold: itemData.minimum_threshold,
-          unit_cost: itemData.unit_cost || null,
-          supplier_name: itemData.supplier_name || null,
-          supplier_contact: itemData.supplier_contact || null,
-          expiry_date: itemData.expiry_date || null,
-        })
-        .select(`
-          *,
-          category:inventory_categories(*)
-        `)
-        .single();
+      const isLikelyAutoCode = (code?: string | null) => (code || '').trim().toUpperCase().startsWith('ITM-');
+      const tryInsert = async (itemCode: string | null) => {
+        return supabase
+          .from('inventory_items')
+          .insert({
+            item_name: itemData.item_name,
+            item_code: itemCode,
+            category_id: itemData.category_id || null,
+            unit_of_measure: itemData.unit_of_measure,
+            current_quantity: itemData.current_quantity,
+            minimum_threshold: itemData.minimum_threshold,
+            unit_cost: itemData.unit_cost || null,
+            supplier_name: itemData.supplier_name || null,
+            supplier_contact: itemData.supplier_contact || null,
+            expiry_date: itemData.expiry_date || null,
+          })
+          .select(`
+            *,
+            category:inventory_categories(*)
+          `)
+          .single();
+      };
 
-      if (error) throw error;
+      const initialCode = generateItemCode();
+
+      let { data, error } = await tryInsert(initialCode);
+
+      // If unique constraint fails (e.g. item_code), regenerate and retry once.
+      if (error && error.code === '23505' && isLikelyAutoCode(initialCode)) {
+        const retryCode = generateItemCode();
+        ({ data, error } = await tryInsert(retryCode));
+      }
+
+      if (error) {
+        if (error.code === '23505') {
+          throw new Error('Duplicate value detected (likely item code). Please change the Item Code and try again.');
+        }
+        throw error;
+      }
+
       setItems((prev) => [mapRowToItem(data), ...prev]);
       return { success: true, data };
     } catch (error: any) {
@@ -183,7 +214,6 @@ export function useInventory() {
         .from('inventory_items')
         .update({
           item_name: itemData.item_name,
-          item_code: itemData.item_code || null,
           category_id: itemData.category_id || null,
           unit_of_measure: itemData.unit_of_measure,
           current_quantity: itemData.current_quantity,
@@ -205,6 +235,9 @@ export function useInventory() {
       return { success: true };
     } catch (error: any) {
       console.error('Error updating item:', error);
+      if (error?.code === '23505') {
+        return { success: false, error: 'Duplicate value detected (likely item code). Please choose a different Item Code.' };
+      }
       return { success: false, error: error.message };
     }
   };

@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { useCallback } from 'react';
+import { useTenant } from '@/contexts/TenantContext';
+import type { AppRole } from '@/contexts/TenantContext';
 
-export type AppRole = 'admin' | 'dentist' | 'receptionist' | 'super_admin';
+export type { AppRole };
 
 interface UseUserRoleReturn {
   role: AppRole | null;
@@ -20,50 +20,19 @@ interface UseUserRoleReturn {
 }
 
 export function useUserRole(): UseUserRoleReturn {
-  const { user, isAuthenticated } = useAuth();
-  const [role, setRole] = useState<AppRole | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchRole() {
-      if (!user || !isAuthenticated) {
-        setRole(null);
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', user.id)
-          .single();
-
-        if (error) {
-          console.error('Error fetching user role:', error);
-          setRole(null);
-        } else {
-          setRole(data?.role as AppRole || null);
-        }
-      } catch (err) {
-        console.error('Error fetching user role:', err);
-        setRole(null);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    fetchRole();
-  }, [user, isAuthenticated]);
+  const { role, isLoading } = useTenant();
 
   const isSuperAdmin = role === 'super_admin';
   const isAdmin = role === 'admin' || isSuperAdmin;
   const isDentist = role === 'dentist';
   const isReceptionist = role === 'receptionist';
 
-  const hasRole = (requiredRole: AppRole): boolean => {
-    return role === requiredRole;
-  };
+  const hasRole = useCallback(
+    (requiredRole: AppRole): boolean => {
+      return role === requiredRole;
+    },
+    [role],
+  );
 
   // Permission mappings based on role
   // Admin: Full access

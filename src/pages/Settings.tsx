@@ -1,23 +1,174 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTenant } from '@/contexts/TenantContext';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Building, User, Bell, Shield, Palette } from 'lucide-react';
+import { Building, User, Bell } from 'lucide-react';
+
+function toClinicBaseName(storedName: string): string {
+  let next = String(storedName || '').trim();
+  if (!next) return '';
+
+  next = next.replace(/\bdental\b/gi, ' ');
+  next = next.replace(/['’]s\s+clinic\s*$/i, '');
+  next = next.replace(/\bclinic\b\s*$/i, '');
+  next = next.replace(/\s+/g, ' ').trim();
+  return next;
+}
+
+function toClinicDisplayName(baseName: string): string {
+  let next = String(baseName || '').trim();
+  next = next.replace(/\bdental\b/gi, ' ');
+  next = next.replace(/\s+/g, ' ').trim();
+  if (!next) return '';
+  return `${next}'s Clinic`;
+}
 
 export default function Settings() {
   const { user } = useAuth();
+  const { activeClinic, activeClinicId, isLoading: isTenantLoading, refresh, setActiveClinicName } = useTenant();
   const { toast } = useToast();
 
-  const handleSave = () => {
-    toast({
-      title: 'Settings Saved',
-      description: 'Your settings have been updated successfully',
-    });
+  const [clinicName, setClinicName] = useState('');
+  const [isSavingClinic, setIsSavingClinic] = useState(false);
+
+  const [firstName, setFirstName] = useState(user?.user_metadata?.first_name || '');
+  const [lastName, setLastName] = useState(user?.user_metadata?.last_name || '');
+  const [phone, setPhone] = useState(user?.user_metadata?.phone || '');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  const showAdvancedClinicSettings = false;
+  const showAdvancedNotifications = false;
+  const showChangePassword = false;
+
+  const profileInitials = useMemo(() => {
+    const a = String(firstName || user?.email?.[0] || 'U').trim()[0] || 'U';
+    const b = String(lastName || '').trim()[0] || '';
+    return `${a}${b}`.toUpperCase();
+  }, [firstName, lastName, user?.email]);
+
+  useEffect(() => {
+    setFirstName(user?.user_metadata?.first_name || '');
+    setLastName(user?.user_metadata?.last_name || '');
+    setPhone(user?.user_metadata?.phone || '');
+  }, [user?.id]);
+
+  useEffect(() => {
+    setClinicName(toClinicBaseName(activeClinic?.name || ''));
+  }, [activeClinic?.id]);
+
+  const handleSaveClinic = async () => {
+    if (!activeClinicId) {
+      toast({
+        title: 'No clinic selected',
+        description: 'Please select a clinic first.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const baseName = String(clinicName || '').trim();
+    if (!baseName) {
+      toast({
+        title: 'Validation error',
+        description: 'Clinic name is required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (/\s/.test(baseName)) {
+      toast({
+        title: 'Validation error',
+        description: 'Please enter only one name (no spaces).',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const displayName = toClinicDisplayName(baseName);
+    if (!displayName) {
+      toast({
+        title: 'Validation error',
+        description: 'Clinic name is required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSavingClinic(true);
+    try {
+      const { error } = await supabase
+        .from('clinics')
+        .update({ name: displayName })
+        .eq('id', activeClinicId);
+
+      if (error) throw error;
+
+      // Update UI immediately even if the re-fetch is blocked by RLS.
+      setActiveClinicName(displayName);
+
+      // Best-effort re-fetch to sync all tenant state.
+      await refresh();
+
+      toast({
+        title: 'Clinic updated',
+        description: 'Clinic name has been updated successfully.',
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Failed to update clinic',
+        description: err?.message || 'An unexpected error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingClinic(false);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+
+    if (!String(firstName || '').trim()) {
+      toast({
+        title: 'Validation error',
+        description: 'First name is required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSavingProfile(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          first_name: String(firstName || '').trim(),
+          last_name: String(lastName || '').trim(),
+          phone: String(phone || '').trim(),
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Profile updated',
+        description: 'Your profile has been updated successfully.',
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Failed to update profile',
+        description: err?.message || 'An unexpected error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   return (
@@ -46,89 +197,93 @@ export default function Settings() {
             <Card>
               <CardHeader>
                 <CardTitle>Clinic Information</CardTitle>
-                <CardDescription>Basic information about your dental clinic</CardDescription>
+                <CardDescription>Basic information for this clinic</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 max-w-xl">
                   <div>
                     <label className="form-label">Clinic Name</label>
-                    <Input defaultValue="DentalCare Clinic" />
-                  </div>
-                  <div>
-                    <label className="form-label">Phone Number</label>
-                    <Input defaultValue="042-1234567" />
-                  </div>
-                  <div>
-                    <label className="form-label">Email</label>
-                    <Input type="email" defaultValue="info@dentalcare.pk" />
-                  </div>
-                  <div>
-                    <label className="form-label">Website</label>
-                    <Input defaultValue="www.dentalcare.pk" />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="form-label">Address</label>
-                    <Textarea defaultValue="123 Main Boulevard, Gulberg III, Lahore, Pakistan" rows={2} />
+                    <Input
+                      value={clinicName}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        const normalized = String(raw || '').replace(/\s+/g, ' ').trim();
+                        const first = normalized.split(' ')[0] || '';
+                        setClinicName(first);
+                      }}
+                      placeholder={isTenantLoading ? 'Loading…' : "Enter clinic owner's name"}
+                      disabled={isTenantLoading || !activeClinicId}
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Example: enter <span className="font-medium">Mohammed</span> to get{' '}
+                      <span className="font-medium">Mohammed&apos;s Clinic</span>
+                    </p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Business Hours</CardTitle>
-                <CardDescription>Set your clinic operating hours</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="form-label">Opening Time</label>
-                    <Input type="time" defaultValue="09:00" />
-                  </div>
-                  <div>
-                    <label className="form-label">Closing Time</label>
-                    <Input type="time" defaultValue="18:00" />
-                  </div>
-                  <div>
-                    <label className="form-label">Appointment Duration (min)</label>
-                    <Input type="number" defaultValue="30" />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <p className="font-medium">Sunday Closed</p>
-                    <p className="text-sm text-muted-foreground">Close clinic on Sundays</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-              </CardContent>
-            </Card>
+            {showAdvancedClinicSettings && (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Business Hours</CardTitle>
+                    <CardDescription>Set your clinic operating hours</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="form-label">Opening Time</label>
+                        <Input type="time" defaultValue="09:00" />
+                      </div>
+                      <div>
+                        <label className="form-label">Closing Time</label>
+                        <Input type="time" defaultValue="18:00" />
+                      </div>
+                      <div>
+                        <label className="form-label">Appointment Duration (min)</label>
+                        <Input type="number" defaultValue="30" />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <div>
+                        <p className="font-medium">Sunday Closed</p>
+                        <p className="text-sm text-muted-foreground">Close clinic on Sundays</p>
+                      </div>
+                      <Switch defaultChecked />
+                    </div>
+                  </CardContent>
+                </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Invoice Settings</CardTitle>
-                <CardDescription>Configure invoice numbering and terms</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="form-label">Invoice Prefix</label>
-                    <Input defaultValue="INV-" />
-                  </div>
-                  <div>
-                    <label className="form-label">Next Invoice Number</label>
-                    <Input type="number" defaultValue="5" />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="form-label">Default Payment Terms</label>
-                    <Textarea defaultValue="Payment due within 14 days. Cash, Card, and Bank Transfer accepted." rows={2} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Invoice Settings</CardTitle>
+                    <CardDescription>Configure invoice numbering and terms</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="form-label">Invoice Prefix</label>
+                        <Input defaultValue="INV-" />
+                      </div>
+                      <div>
+                        <label className="form-label">Next Invoice Number</label>
+                        <Input type="number" defaultValue="5" />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="form-label">Default Payment Terms</label>
+                        <Input defaultValue="Payment due within 14 days. Cash, Card, and Bank Transfer accepted." />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
 
             <div className="flex justify-end">
-              <Button onClick={handleSave}>Save Changes</Button>
+              <Button onClick={handleSaveClinic} disabled={isTenantLoading || isSavingClinic || !activeClinicId}>
+                {isSavingClinic ? 'Saving…' : 'Save Changes'}
+              </Button>
             </div>
           </TabsContent>
 
@@ -142,60 +297,63 @@ export default function Settings() {
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-6">
                   <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center text-primary text-2xl font-bold">
-                    {(user?.user_metadata?.first_name?.[0] || user?.email?.[0] || 'U').toUpperCase()}
-                    {(user?.user_metadata?.last_name?.[0] || '').toUpperCase()}
+                    {profileInitials}
                   </div>
                   <div>
                     <Button variant="outline">Change Photo</Button>
                     <p className="text-sm text-muted-foreground mt-1">JPG or PNG. Max 2MB.</p>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 max-w-xl">
                   <div>
                     <label className="form-label">First Name</label>
-                    <Input defaultValue={user?.user_metadata?.first_name || ''} />
+                    <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
                   </div>
                   <div>
                     <label className="form-label">Last Name</label>
-                    <Input defaultValue={user?.user_metadata?.last_name || ''} />
+                    <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
                   </div>
                   <div>
                     <label className="form-label">Email</label>
-                    <Input type="email" defaultValue={user?.email || ''} />
+                    <Input type="email" value={user?.email || ''} disabled />
                   </div>
                   <div>
                     <label className="form-label">Phone</label>
-                    <Input defaultValue={user?.user_metadata?.phone || ''} />
+                    <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Change Password</CardTitle>
-                <CardDescription>Update your account password</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 gap-4 max-w-md">
-                  <div>
-                    <label className="form-label">Current Password</label>
-                    <Input type="password" />
+            {showChangePassword && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Change Password</CardTitle>
+                  <CardDescription>Update your account password</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4 max-w-md">
+                    <div>
+                      <label className="form-label">Current Password</label>
+                      <Input type="password" />
+                    </div>
+                    <div>
+                      <label className="form-label">New Password</label>
+                      <Input type="password" />
+                    </div>
+                    <div>
+                      <label className="form-label">Confirm New Password</label>
+                      <Input type="password" />
+                    </div>
                   </div>
-                  <div>
-                    <label className="form-label">New Password</label>
-                    <Input type="password" />
-                  </div>
-                  <div>
-                    <label className="form-label">Confirm New Password</label>
-                    <Input type="password" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
             <div className="flex justify-end">
-              <Button onClick={handleSave}>Save Changes</Button>
+              <Button onClick={handleSaveProfile} disabled={isSavingProfile || !user}>
+                {isSavingProfile ? 'Saving…' : 'Save Changes'}
+              </Button>
             </div>
           </TabsContent>
 
@@ -228,25 +386,38 @@ export default function Settings() {
                   </div>
                   <Switch defaultChecked />
                 </div>
-                <div className="flex items-center justify-between py-3 border-b border-border">
-                  <div>
-                    <p className="font-medium">Overdue Invoices</p>
-                    <p className="text-sm text-muted-foreground">Get notified about overdue payments</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between py-3">
-                  <div>
-                    <p className="font-medium">Daily Summary</p>
-                    <p className="text-sm text-muted-foreground">Receive a daily summary email</p>
-                  </div>
-                  <Switch />
-                </div>
+                {showAdvancedNotifications && (
+                  <>
+                    <div className="flex items-center justify-between py-3 border-b border-border">
+                      <div>
+                        <p className="font-medium">Overdue Invoices</p>
+                        <p className="text-sm text-muted-foreground">Get notified about overdue payments</p>
+                      </div>
+                      <Switch defaultChecked />
+                    </div>
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="font-medium">Daily Summary</p>
+                        <p className="text-sm text-muted-foreground">Receive a daily summary email</p>
+                      </div>
+                      <Switch />
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 
             <div className="flex justify-end">
-              <Button onClick={handleSave}>Save Changes</Button>
+              <Button
+                onClick={() =>
+                  toast({
+                    title: 'Saved',
+                    description: 'Notification preferences saved locally for now.',
+                  })
+                }
+              >
+                Save Changes
+              </Button>
             </div>
           </TabsContent>
         </Tabs>

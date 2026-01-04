@@ -381,8 +381,8 @@ export default function Reports() {
             <Card className="bg-gradient-to-r from-destructive to-destructive/80 text-destructive-foreground">
               <CardContent className="p-6 flex items-center justify-between">
                 <div>
-                  <p className="text-sm opacity-80">Total Outstanding</p>
-                  <p className="text-3xl font-bold">Rs. {totalOutstanding.toLocaleString()}</p>
+                  <p className="text-sm text-foreground opacity-80">Total Outstanding</p>
+                  <p className="text-3xl font-bold text-foreground">Rs. {totalOutstanding.toLocaleString()}</p>
                 </div>
                 <AlertTriangle className="h-12 w-12 opacity-20" />
               </CardContent>

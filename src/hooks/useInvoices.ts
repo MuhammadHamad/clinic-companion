@@ -156,12 +156,15 @@ export function useInvoices() {
       const invoice = invoices.find(i => i.id === invoiceId);
       if (!invoice) throw new Error('Invoice not found');
 
+      const paymentDate = new Date().toISOString().split('T')[0];
+
       // Insert payment record
       const { error: paymentError } = await supabase
         .from('payments')
         .insert({
           invoice_id: invoiceId,
           patient_id: invoice.patient_id,
+          payment_date: paymentDate,
           amount: paymentData.amount,
           payment_method: paymentData.payment_method,
           reference_number: paymentData.reference_number || null,

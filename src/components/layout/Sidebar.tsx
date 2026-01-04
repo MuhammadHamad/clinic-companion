@@ -2,7 +2,6 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
-  Calendar,
   FileText,
   Package,
   BarChart3,
@@ -11,7 +10,9 @@ import {
   Stethoscope,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useUserRole, AppRole } from '@/hooks/useUserRole';
+import { useUserRole } from '@/hooks/useUserRole';
+import type { AppRole } from '@/contexts/TenantContext';
+import { useTenant } from '@/contexts/TenantContext';
 
 interface NavItem {
   name: string;
@@ -25,7 +26,6 @@ const navigation: NavItem[] = [
   { name: 'Patients', href: '/patients', icon: Users },
   { name: 'Invoices', href: '/invoices', icon: FileText, allowedRoles: ['admin', 'receptionist'] },
   { name: 'Inventory', href: '/inventory', icon: Package, allowedRoles: ['admin'] },
-  { name: 'Appointments', href: '/appointments', icon: Calendar },
   { name: 'Reports', href: '/reports', icon: BarChart3, allowedRoles: ['admin', 'dentist'] },
 ];
 
@@ -38,6 +38,7 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
   const location = useLocation();
 
   const { role, isSuperAdmin, canAccessSettings, isLoading: isRoleLoading } = useUserRole();
+  const { activeClinic } = useTenant();
 
   if (isSuperAdmin) {
     return null;
@@ -60,9 +61,10 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
             <Stethoscope className="h-5 w-5 text-primary-foreground" />
           </div>
-          <div>
-            <h1 className="text-lg font-display font-bold text-sidebar-foreground">DentalCare</h1>
-            <p className="text-xs text-sidebar-muted">Clinic Management</p>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-base font-display font-semibold leading-tight tracking-tight text-sidebar-foreground">
+              {activeClinic?.name || 'Clinic Companion'}
+            </h1>
           </div>
         </div>
 

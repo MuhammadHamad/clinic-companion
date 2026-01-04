@@ -38,6 +38,10 @@ export function useDashboard() {
       const today = new Date().toISOString().split('T')[0];
       const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
       const startOfYear = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
+      const todayStart = `${today}T00:00:00`;
+      const todayEnd = `${today}T23:59:59`;
+      const startOfMonthTs = `${startOfMonth}T00:00:00`;
+      const startOfYearTs = `${startOfYear}T00:00:00`;
       
       // Generate month keys for the current calendar year (Jan–Dec)
       const currentDate = new Date();
@@ -82,20 +86,20 @@ export function useDashboard() {
         supabase
           .from('payments')
           .select('amount')
-          .gte('payment_date', today)
-          .lte('payment_date', today),
+          .gte('created_at', todayStart)
+          .lte('created_at', todayEnd),
         
         // Month's revenue
         supabase
           .from('payments')
           .select('amount')
-          .gte('payment_date', startOfMonth),
+          .gte('created_at', startOfMonthTs),
         
         // Year's revenue + data for monthly trend
         supabase
           .from('payments')
-          .select('amount, payment_date')
-          .gte('payment_date', startOfYear),
+          .select('amount, payment_date, created_at')
+          .gte('created_at', startOfYearTs),
         
         // Outstanding invoices
         supabase
@@ -132,9 +136,9 @@ export function useDashboard() {
           }
           return supabase
             .from('payments')
-            .select('amount, payment_date')
-            .gte('payment_date', last7Days[0])
-            .lte('payment_date', last7Days[6]);
+            .select('amount, payment_date, created_at')
+            .gte('created_at', `${last7Days[0]}T00:00:00`)
+            .lte('created_at', `${last7Days[6]}T23:59:59`);
         })()
       ]);
 
@@ -239,7 +243,7 @@ export function useDashboard() {
       const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
       const chartData = last7Days.map(date => {
         const dayRevenue = (weekPaymentsResult.data || [])
-          .filter(p => p.payment_date === date)
+          .filter((p: any) => (p.payment_date || (p.created_at ? String(p.created_at).split('T')[0] : '')) === date)
           .reduce((sum, p) => sum + Number(p.amount), 0);
         
         return {
