@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardStats, Appointment, AppointmentStatus, Patient } from '@/types';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks';
 
 export function useDashboard() {
   const [stats, setStats] = useState<DashboardStats>({

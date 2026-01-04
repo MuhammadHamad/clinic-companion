@@ -31,11 +31,9 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
-import { useAppointments } from '@/hooks/useAppointments';
-import { usePatients } from '@/hooks/usePatients';
-import { useTreatmentTypes } from '@/hooks/useTreatmentTypes';
+import { useAppointments, usePatients, useTreatmentTypes } from '@/hooks';
 import { Appointment, AppointmentStatus, AppointmentType } from '@/types';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 

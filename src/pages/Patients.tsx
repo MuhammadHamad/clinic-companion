@@ -1,10 +1,26 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
+import { 
+  Plus, 
+  Search, 
+  Eye, 
+  Pencil, 
+  Phone, 
+  Mail,
+  Calendar,
+  DollarSign,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Trash2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { useLocation, useNavigate } from 'react-router-dom';
-import {
+import { 
   Table,
   TableBody,
   TableCell,
@@ -12,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
+import { 
   Dialog,
   DialogContent,
   DialogDescription,
@@ -20,7 +36,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
+import { 
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -38,37 +54,22 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { 
-  Plus, 
-  Search, 
-  Eye, 
-  Pencil, 
-  Phone, 
-  Mail,
-  Calendar,
-  DollarSign,
-  Filter,
-  ChevronLeft,
-  ChevronRight,
-  Loader2,
-  Trash2,
-} from 'lucide-react';
-import { usePatients } from '@/hooks/usePatients';
-import { useInvoices } from '@/hooks/useInvoices';
+import { usePatients, useInvoices } from '@/hooks';
 import { supabase } from '@/integrations/supabase/client';
 import { Invoice, Patient, Payment, PaymentMethod } from '@/types';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
+import { patientSchema, type PatientFormData } from '@/lib/validation';
 
- const statusColors: Record<string, string> = {
-   draft: 'bg-muted text-muted-foreground',
-   unpaid: 'bg-financial-unpaid/10 text-financial-unpaid border-financial-unpaid/20',
-   partial: 'bg-financial-partial/10 text-financial-partial border-financial-partial/20',
-   paid: 'bg-financial-paid/10 text-financial-paid border-financial-paid/20',
-   overdue: 'bg-financial-overdue/10 text-financial-overdue border-financial-overdue/20',
- };
+const statusColors: Record<string, string> = {
+  draft: 'bg-muted text-muted-foreground',
+  unpaid: 'bg-financial-unpaid/10 text-financial-unpaid border-financial-unpaid/20',
+  partial: 'bg-financial-partial/10 text-financial-partial border-financial-partial/20',
+  paid: 'bg-financial-paid/10 text-financial-paid border-financial-paid/20',
+  overdue: 'bg-financial-overdue/10 text-financial-overdue border-financial-overdue/20',
+};
 
 export default function Patients() {
   const { patients, isLoading, createPatient, updatePatient, deletePatient } = usePatients();
@@ -427,10 +428,13 @@ export default function Patients() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.first_name || !formData.last_name || !formData.phone) {
+    // Validate form data with Zod
+    const validationResult = patientSchema.safeParse(formData);
+    if (!validationResult.success) {
+      const errorMessages = validationResult.error.errors.map(err => err.message).join('. ');
       toast({
         title: 'Validation Error',
-        description: 'Please fill in all required fields',
+        description: errorMessages,
         variant: 'destructive',
       });
       return;

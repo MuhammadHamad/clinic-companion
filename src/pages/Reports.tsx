@@ -23,9 +23,7 @@ import {
   Package,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { useInvoices } from '@/hooks/useInvoices';
-import { useInventory } from '@/hooks/useInventory';
-import { usePatients } from '@/hooks/usePatients';
+import { useInvoices, useInventory, usePatients } from '@/hooks';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 

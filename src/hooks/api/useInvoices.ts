@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Invoice, InvoiceItem, InvoiceStatus, Patient, PaymentMethod } from '@/types';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks';
 
 export function useInvoices() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);

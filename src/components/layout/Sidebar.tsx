@@ -10,7 +10,7 @@ import {
   Stethoscope,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useUserRole } from '@/hooks/useUserRole';
+import { useUserRole } from '@/hooks';
 import type { AppRole } from '@/contexts/TenantContext';
 import { useTenant } from '@/contexts/TenantContext';
 

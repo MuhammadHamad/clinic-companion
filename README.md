@@ -1,73 +1,102 @@
-# Welcome to your Lovable project
+# Clinic Companion
 
-## Project info
+A modern clinic management system built with React, TypeScript, and Supabase.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Features
 
-## How can I edit this code?
+- Patient management with comprehensive profiles
+- Invoice and payment tracking
+- Inventory management
+- Appointment scheduling
+- Multi-clinic support (SaaS)
+- Real-time data synchronization
+- Responsive design with modern UI
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+- **Frontend**: React 18, TypeScript, Vite
+- **UI Framework**: shadcn/ui, Tailwind CSS
+- **Backend**: Supabase (PostgreSQL, Auth, Real-time)
+- **State Management**: React Query, Custom Hooks
+- **Form Validation**: Zod schemas
+- **Build Tools**: Vite, SWC
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Quick Start
 
-Changes made via Lovable will be committed automatically to this repo.
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd clinic-companion
+   ```
 
-**Use your preferred IDE**
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+3. **Set up environment variables**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your Supabase credentials
+   ```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+4. **Start development server**
+   ```bash
+   npm run dev
+   ```
 
-Follow these steps:
+## Environment Setup
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+Create a `.env` file with your Supabase configuration:
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```env
+VITE_SUPABASE_URL=YOUR_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
 ```
 
-**Edit a file directly in GitHub**
+## Database Setup
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Ensure your Supabase database has:
+- RLS policies enabled on all tables
+- Required indexes on foreign keys
+- Proper user roles and permissions
 
-**Use GitHub Codespaces**
+See `DEPLOYMENT.md` for detailed setup instructions.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Project Structure
 
-## What technologies are used for this project?
+```
+src/
+├── components/          # Reusable UI components
+│   ├── ui/              # shadcn/ui components
+│   └── layout/          # Layout components
+├── pages/               # Page components
+├── hooks/               # Custom React hooks
+├── lib/                 # Utilities and validation
+├── types/               # TypeScript type definitions
+├── contexts/            # React contexts
+└── integrations/        # External service integrations
+```
 
-This project is built with:
+## Scripts
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run preview` - Preview production build
+- `npm run lint` - Run ESLint
 
-## How can I deploy this project?
+## Security & Performance
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+- Row Level Security (RLS) on all database tables
+- Input validation with Zod schemas
+- Optimized database queries and indexes
+- Environment variable configuration
+- No known security vulnerabilities
 
-## Can I connect a custom domain to my Lovable project?
+## Deployment
 
-Yes, you can!
+See `DEPLOYMENT.md` for comprehensive deployment instructions.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## License
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Private - All rights reserved

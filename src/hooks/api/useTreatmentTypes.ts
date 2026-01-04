@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { TreatmentType } from '@/types';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks';
 
 export function useTreatmentTypes() {
   const [treatmentTypes, setTreatmentTypes] = useState<TreatmentType[]>([]);

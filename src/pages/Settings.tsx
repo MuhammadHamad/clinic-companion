@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks';
 import { Building, User, Bell } from 'lucide-react';
 
 function toClinicBaseName(storedName: string): string {

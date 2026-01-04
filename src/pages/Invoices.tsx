@@ -31,14 +31,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useInvoices, usePatients, useTreatmentTypes } from '@/hooks';
+import { invoiceSchema, paymentSchema, type InvoiceFormData, type PaymentFormData } from '@/lib/validation';
 import { 
   Plus, 
   Search, 
@@ -49,11 +46,8 @@ import {
   Trash2,
   CreditCard,
 } from 'lucide-react';
-import { useInvoices } from '@/hooks/useInvoices';
-import { usePatients } from '@/hooks/usePatients';
-import { useTreatmentTypes } from '@/hooks/useTreatmentTypes';
 import { Invoice, InvoiceItem, InvoiceStatus, PaymentMethod } from '@/types';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks';
 import { cn } from '@/lib/utils';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -98,7 +92,7 @@ export default function Invoices() {
 
   const [paymentData, setPaymentData] = useState({
     amount: 0,
-    payment_method: '' as PaymentMethod | '',
+    payment_method: undefined as PaymentMethod | undefined,
     reference_number: '',
     notes: '',
   });
@@ -177,7 +171,7 @@ export default function Invoices() {
     setSelectedInvoice(invoice);
     setPaymentData({
       amount: invoice.balance,
-      payment_method: '',
+      payment_method: undefined,
       reference_number: '',
       notes: '',
     });
@@ -247,10 +241,13 @@ export default function Invoices() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.patient_id || formData.items.every(i => !i.description)) {
+    // Validate form data with Zod
+    const validationResult = invoiceSchema.safeParse(formData);
+    if (!validationResult.success) {
+      const errorMessages = validationResult.error.errors.map(err => err.message).join('. ');
       toast({
         title: 'Validation Error',
-        description: 'Please select a patient and add at least one item',
+        description: errorMessages,
         variant: 'destructive',
       });
       return;
@@ -285,10 +282,13 @@ export default function Invoices() {
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!paymentData.payment_method || paymentData.amount <= 0 || !selectedInvoice) {
+    // Validate payment data with Zod
+    const validationResult = paymentSchema.safeParse(paymentData);
+    if (!validationResult.success) {
+      const errorMessages = validationResult.error.errors.map(err => err.message).join('. ');
       toast({
         title: 'Validation Error',
-        description: 'Please enter a valid amount and payment method',
+        description: errorMessages,
         variant: 'destructive',
       });
       return;

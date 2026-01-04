@@ -52,9 +52,9 @@ import {
   Trash2,
   List,
 } from 'lucide-react';
-import { useInventory } from '@/hooks/useInventory';
+import { useInventory } from '@/hooks';
 import { InventoryItem, InventoryCategory, InventoryStatus, MovementType } from '@/types';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'react-router-dom';
 

@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom';
-import { useUserRole } from '@/hooks/useUserRole';
+import { useUserRole } from '@/hooks';
 
 interface SuperAdminRouteProps {
   children: React.ReactNode;

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Appointment, AppointmentStatus, AppointmentType, Patient } from '@/types';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks';
 
 export function useAppointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);

@@ -7,9 +7,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks';
 import { supabase } from '@/integrations/supabase/client';
-import type { AppRole } from '@/hooks/useUserRole';
+import type { AppRole } from '@/contexts/TenantContext';
 
 type UserRoleRow = {
   user_id: string;
