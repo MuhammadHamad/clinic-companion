@@ -30,10 +30,11 @@ export interface Patient {
   registration_date: string;
   last_visit_date?: string;
   notes?: string;
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'archived';
   created_at: string;
   created_by?: string;
   balance?: number;
+  archived_at?: string;
 }
 
 // Appointment types

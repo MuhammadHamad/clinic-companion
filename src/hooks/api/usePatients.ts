@@ -127,22 +127,58 @@ export function usePatients() {
     }
   };
 
-  const deletePatient = async (id: string) => {
+  const archivePatient = async (id: string) => {
     try {
       const { error } = await supabase
         .from('patients')
-        .delete()
+        .update({ 
+          status: 'archived',
+          archived_at: new Date().toISOString()
+        })
         .eq('id', id);
 
       if (error) throw error;
 
-      setPatients((prev) => prev.filter((p) => p.id !== id));
+      setPatients((prev) => prev.map((p) => 
+        p.id === id 
+          ? { ...p, status: 'archived' as const, archived_at: new Date().toISOString() }
+          : p
+      ));
       return { success: true };
     } catch (error: any) {
-      console.error('Error deleting patient:', error);
+      console.error('Error archiving patient:', error);
       toast({
         title: 'Error',
-        description: 'Failed to delete patient',
+        description: 'Failed to archive patient',
+        variant: 'destructive',
+      });
+      return { success: false, error: error.message };
+    }
+  };
+
+  const restorePatient = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('patients')
+        .update({ 
+          status: 'active',
+          archived_at: null
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setPatients((prev) => prev.map((p) => 
+        p.id === id 
+          ? { ...p, status: 'active' as const, archived_at: undefined }
+          : p
+      ));
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error restoring patient:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to restore patient',
         variant: 'destructive',
       });
       return { success: false, error: error.message };
@@ -159,6 +195,7 @@ export function usePatients() {
     fetchPatients,
     createPatient,
     updatePatient,
-    deletePatient,
+    archivePatient,
+    restorePatient,
   };
 }

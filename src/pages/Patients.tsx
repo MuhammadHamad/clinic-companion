@@ -15,6 +15,8 @@ import {
   ChevronRight,
   Loader2,
   Trash2,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,7 +74,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function Patients() {
-  const { patients, isLoading, createPatient, updatePatient, deletePatient } = usePatients();
+  const { patients, isLoading, createPatient, updatePatient, archivePatient, restorePatient } = usePatients();
   const { invoices, recordPayment } = useInvoices();
   const location = useLocation();
   const navigate = useNavigate();
@@ -363,28 +365,45 @@ export default function Patients() {
     setIsDeleteOpen(true);
   };
 
-  const confirmDeletePatient = async () => {
+  const confirmArchivePatient = async () => {
     if (!patientToDelete) return;
     setIsDeleting(true);
 
-    const result = await deletePatient(patientToDelete.id);
+    const result = await archivePatient(patientToDelete.id);
 
     if (result.success) {
       toast({
-        title: 'Patient deleted',
-        description: 'The patient record has been removed successfully.',
+        title: 'Patient Archived',
+        description: 'The patient record has been archived successfully.',
       });
       setIsDeleteOpen(false);
       setPatientToDelete(null);
     } else {
       toast({
         title: 'Error',
-        description: result.error || 'Failed to delete patient',
+        description: result.error || 'Failed to archive patient',
         variant: 'destructive',
       });
     }
 
     setIsDeleting(false);
+  };
+
+  const handleRestorePatient = async (patient: Patient) => {
+    const result = await restorePatient(patient.id);
+    
+    if (result.success) {
+      toast({
+        title: 'Patient Restored',
+        description: 'The patient has been restored to active status.',
+      });
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error || 'Failed to restore patient',
+        variant: 'destructive',
+      });
+    }
   };
 
   const createPatientFromForm = async () => {
@@ -543,6 +562,7 @@ export default function Patients() {
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -603,7 +623,12 @@ export default function Patients() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={patient.status === 'active' ? 'default' : 'secondary'}>
+                        <Badge 
+                          variant={
+                            patient.status === 'active' ? 'default' : 
+                            patient.status === 'archived' ? 'destructive' : 'secondary'
+                          }
+                        >
                           {patient.status}
                         </Badge>
                       </TableCell>
@@ -620,16 +645,27 @@ export default function Patients() {
                             variant="ghost"
                             size="icon"
                             onClick={() => openEditForm(patient)}
+                            disabled={patient.status === 'archived'}
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openDeleteDialog(patient)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          {patient.status === 'archived' ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRestorePatient(patient)}
+                            >
+                              <ArchiveRestore className="h-4 w-4 text-green-600" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openDeleteDialog(patient)}
+                            >
+                              <Archive className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1432,11 +1468,11 @@ export default function Patients() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete patient</AlertDialogTitle>
+            <AlertDialogTitle>Archive Patient</AlertDialogTitle>
             <AlertDialogDescription>
               {patientToDelete
-                ? `Are you sure you want to delete patient ${patientToDelete.first_name} ${patientToDelete.last_name}? This action cannot be undone.`
-                : 'Are you sure you want to delete this patient? This action cannot be undone.'}
+                ? `Are you sure you want to archive patient ${patientToDelete.first_name} ${patientToDelete.last_name}? The patient will be moved to the archived section and can be restored later.`
+                : 'Are you sure you want to archive this patient? The patient will be moved to the archived section and can be restored later.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1446,10 +1482,17 @@ export default function Patients() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={(e) => {
                 e.preventDefault();
-                confirmDeletePatient();
+                confirmArchivePatient();
               }}
             >
-              Delete
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Archiving...
+                </>
+              ) : (
+                'Archive Patient'
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
