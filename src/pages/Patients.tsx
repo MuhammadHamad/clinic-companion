@@ -25,6 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Card, CardContent } from '@/components/ui/card';
 import { 
   Table,
   TableBody,
@@ -177,6 +178,30 @@ export default function Patients() {
 
     return map;
   }, [invoices]);
+
+  const activePatients = useMemo(
+    () => patients.filter((p) => p.status === 'active').length,
+    [patients]
+  );
+
+  const newPatientsThisMonth = useMemo(() => {
+    const now = new Date();
+    const month = now.getMonth();
+    const year = now.getFullYear();
+
+    return patients.filter((p) => {
+      const createdAt = (p as any).created_at as string | undefined;
+      if (!createdAt) return false;
+      const d = new Date(createdAt);
+      if (Number.isNaN(d.getTime())) return false;
+      return d.getMonth() === month && d.getFullYear() === year;
+    }).length;
+  }, [patients]);
+
+  const totalOutstanding = useMemo(
+    () => invoices.reduce((sum, inv) => sum + Number(inv.balance || 0), 0),
+    [invoices]
+  );
 
   // Pagination calculations
   const totalPatients = filteredPatients.length;
@@ -562,10 +587,57 @@ export default function Patients() {
         <Header title="Patients" subtitle="Manage your patient records" />
       
       <div className="p-4 sm:p-6 space-y-6 animate-fade-in">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <Card>
+            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Plus className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs sm:text-sm text-muted-foreground">Total Patients</p>
+                <p className="text-lg sm:text-xl font-bold">{patients.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+              <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center">
+                <ArchiveRestore className="h-5 w-5 text-success" />
+              </div>
+              <div>
+                <p className="text-xs sm:text-sm text-muted-foreground">Active</p>
+                <p className="text-lg sm:text-xl font-bold">{activePatients}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+              <div className="h-10 w-10 rounded-lg bg-warning/10 flex items-center justify-center">
+                <Calendar className="h-5 w-5 text-warning" />
+              </div>
+              <div>
+                <p className="text-xs sm:text-sm text-muted-foreground">New This Month</p>
+                <p className="text-lg sm:text-xl font-bold">{newPatientsThisMonth}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+              <div className="h-10 w-10 rounded-lg bg-financial-unpaid/10 flex items-center justify-center">
+                <DollarSign className="h-5 w-5 text-financial-unpaid" />
+              </div>
+              <div>
+                <p className="text-xs sm:text-sm text-muted-foreground">Outstanding</p>
+                <p className="text-lg sm:text-xl font-bold">Rs. {totalOutstanding.toLocaleString()}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Actions Bar */}
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
+        <div className="patients-actions-bar flex flex-col gap-4">
+          <div className="patients-actions-row flex flex-col sm:flex-row gap-3">
+            <div className="patients-search relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by name, phone, or patient #..."
@@ -575,7 +647,7 @@ export default function Patients() {
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-36">
+              <SelectTrigger className="patients-status-trigger w-full sm:w-36">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -592,6 +664,31 @@ export default function Patients() {
             Add Patient
           </Button>
         </div>
+
+        <style>{`
+          @media (hover: hover) and (pointer: fine) {
+            .patients-actions-bar {
+              flex-direction: row;
+              align-items: center;
+            }
+            .patients-actions-row {
+              flex: 1;
+              flex-direction: row;
+              align-items: center;
+            }
+            .patients-search {
+              flex: 0 1 36rem;
+              max-width: 36rem;
+            }
+            .patients-status-trigger {
+              width: 9rem;
+            }
+            .patients-actions-bar > button {
+              width: auto !important;
+              white-space: nowrap;
+            }
+          }
+        `}</style>
 
         {/* Patients Table */}
         <div className="bg-card rounded-xl border border-border overflow-hidden">

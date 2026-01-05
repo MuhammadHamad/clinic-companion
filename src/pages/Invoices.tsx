@@ -335,9 +335,9 @@ export default function Invoices() {
         </Card>
 
         {/* Actions Bar */}
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
+        <div className="invoices-actions-bar flex flex-col gap-4">
+          <div className="invoices-actions-row flex flex-col sm:flex-row gap-3">
+            <div className="invoices-search relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by invoice # or patient..."
@@ -347,7 +347,7 @@ export default function Invoices() {
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-36">
+              <SelectTrigger className="invoices-status-trigger w-full sm:w-36">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -365,6 +365,31 @@ export default function Invoices() {
             Create Invoice
           </Button>
         </div>
+
+        <style>{`
+          @media (hover: hover) and (pointer: fine) {
+            .invoices-actions-bar {
+              flex-direction: row;
+              align-items: center;
+            }
+            .invoices-actions-row {
+              flex: 1;
+              flex-direction: row;
+              align-items: center;
+            }
+            .invoices-search {
+              flex: 0 1 36rem;
+              max-width: 36rem;
+            }
+            .invoices-status-trigger {
+              width: 9rem;
+            }
+            .invoices-actions-bar > button {
+              width: auto !important;
+              white-space: nowrap;
+            }
+          }
+        `}</style>
 
         {/* Invoices Table */}
         <div className="bg-card rounded-xl border border-border overflow-hidden">

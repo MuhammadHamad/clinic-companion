@@ -82,195 +82,197 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
 
   return (
     <>
-      {/* Mobile Menu Button - Top Right */}
-      <div className="lg:hidden fixed top-4 right-4 z-50">
+      <div className="sidebar-mobile-only fixed top-0 left-0 right-0 z-50 h-16 px-4 flex items-center justify-between bg-background/80 backdrop-blur border-b border-border">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
+            <Stethoscope className="h-5 w-5 text-primary-foreground" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="truncate text-base font-display font-semibold leading-tight tracking-tight text-foreground">
+              {activeClinic?.name || 'Clinic Companion'}
+            </h1>
+          </div>
+        </div>
         <Button
           variant="outline"
           size="icon"
           onClick={isOpen ? closeSidebar : openSidebar}
-          className="bg-background"
+          className="bg-background/60 backdrop-blur"
         >
           {isOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
         </Button>
       </div>
 
       {/* Desktop Sidebar - Always Visible */}
-      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:z-40 lg:h-screen lg:w-64 lg:bg-sidebar lg:border-r lg:border-sidebar-border">
-        {/* Logo */}
-        <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-            <Stethoscope className="h-5 w-5 text-primary-foreground" />
+      <aside className="sidebar-desktop-only fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar border-r border-sidebar-border">
+        <div className="flex h-full flex-col">
+          {/* Logo */}
+          <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
+              <Stethoscope className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-base font-display font-semibold leading-tight tracking-tight text-sidebar-foreground">
+                {activeClinic?.name || 'Clinic Companion'}
+              </h1>
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-display font-semibold leading-tight tracking-tight text-sidebar-foreground">
-              {activeClinic?.name || 'Clinic Companion'}
-            </h1>
-          </div>
-        </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 space-y-1 px-3 py-4">
-          {filteredNavigation.map((item) => {
-            const isActive = location.pathname === item.href || 
-              (item.href !== '/' && location.pathname.startsWith(item.href));
-            return (
-              <Link
-                key={item.name}
-                to={item.href}
+          {/* Navigation */}
+          <nav className="flex-1 space-y-1 px-3 py-4">
+            {filteredNavigation.map((item) => {
+              const isActive = location.pathname === item.href ||
+                (item.href !== '/' && location.pathname.startsWith(item.href));
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={cn(
+                    'sidebar-item',
+                    isActive && 'sidebar-item-active'
+                  )}
+                >
+                  <item.icon className="h-5 w-5" />
+                  <span>{item.name}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* User Section */}
+          <div className="border-t border-sidebar-border p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sidebar-accent text-sidebar-foreground font-medium">
+                {user?.first_name?.[0] || 'A'}{user?.last_name?.[0] || 'U'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-sidebar-foreground truncate">
+                  {user?.first_name || 'Admin'} {user?.last_name}
+                </p>
+                <p className="text-xs text-sidebar-muted capitalize">
+                  {role || user?.role || 'User'}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              {canAccessSettings && (
+                <Link
+                  to="/settings"
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors"
+                >
+                  <Settings className="h-4 w-4" />
+                  <span className="hidden sm:inline">Settings</span>
+                </Link>
+              )}
+              <button
+                onClick={onLogout}
                 className={cn(
-                  'sidebar-item',
-                  isActive && 'sidebar-item-active'
+                  "flex items-center justify-center px-3 py-2 text-sm text-sidebar-muted hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors",
+                  !canAccessSettings && "flex-1 gap-2"
                 )}
               >
-                <item.icon className="h-5 w-5" />
-                <span>{item.name}</span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* User Section */}
-        <div className="border-t border-sidebar-border p-4">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sidebar-accent text-sidebar-foreground font-medium">
-              {user?.first_name?.[0] || 'A'}{user?.last_name?.[0] || 'U'}
+                <LogOut className="h-4 w-4" />
+                {!canAccessSettings && <span className="hidden sm:inline">Logout</span>}
+              </button>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-sidebar-foreground truncate">
-                {user?.first_name || 'Admin'} {user?.last_name}
-              </p>
-              <p className="text-xs text-sidebar-muted capitalize">
-                {role || user?.role || 'User'}
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            {canAccessSettings && (
-              <Link
-                to="/settings"
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors"
-              >
-                <Settings className="h-4 w-4" />
-                <span className="hidden sm:inline">Settings</span>
-              </Link>
-            )}
-            <button
-              onClick={onLogout}
-              className={cn(
-                "flex items-center justify-center px-3 py-2 text-sm text-sidebar-muted hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors",
-                !canAccessSettings && "flex-1 gap-2"
-              )}
-            >
-              <LogOut className="h-4 w-4" />
-              {!canAccessSettings && <span className="hidden sm:inline">Logout</span>}
-            </button>
           </div>
         </div>
       </aside>
 
-      {/* Full Screen Mobile Overlay */}
-      {isOpen && (
-        <div className="lg:hidden fixed inset-0 z-50">
-          {/* Backdrop with scroll lock */}
-          <div 
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={closeSidebar}
-          />
-          
-          {/* Full-screen slide-down content */}
-          <div 
-            className="absolute inset-x-0 inset-y-0 bg-background transform transition-transform duration-300 ease-out"
-            style={{ 
-              animation: 'slideDown 0.3s ease-out',
-            }}
-          >
-            {/* Header with close button */}
-            <div className="flex items-center justify-between p-4 border-b border-border">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-                  <Stethoscope className="h-5 w-5 text-primary-foreground" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h1 className="truncate text-base font-display font-semibold leading-tight tracking-tight text-foreground">
-                    {activeClinic?.name || 'Clinic Companion'}
-                  </h1>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={closeSidebar}
-                className="h-9 w-9"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
+      <div
+        className={cn(
+          'sidebar-mobile-only fixed inset-0 z-40',
+          isOpen ? 'pointer-events-auto' : 'pointer-events-none'
+        )}
+        aria-hidden={!isOpen}
+      >
+        <div
+          className={cn(
+            'absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300',
+            isOpen ? 'opacity-100' : 'opacity-0'
+          )}
+          onClick={isOpen ? closeSidebar : undefined}
+        />
 
-            {/* Navigation */}
-            <nav className="px-4 py-6 space-y-2">
-              {filteredNavigation.map((item) => {
-                const isActive = location.pathname === item.href || 
-                  (item.href !== '/' && location.pathname.startsWith(item.href));
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.href}
-                    onClick={closeSidebar}
-                    className={cn(
-                      'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
-                      isActive 
-                        ? 'bg-primary text-primary-foreground' 
-                        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                    )}
-                  >
-                    <item.icon className="h-5 w-5" />
-                    <span>{item.name}</span>
-                  </Link>
-                );
-              })}
-            </nav>
-
-            {/* User Section */}
-            <div className="border-t border-border p-4">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-foreground font-medium">
-                  {user?.first_name?.[0] || 'A'}{user?.last_name?.[0] || 'U'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {user?.first_name || 'Admin'} {user?.last_name}
-                  </p>
-                  <p className="text-xs text-muted-foreground capitalize">
-                    {role || user?.role || 'User'}
-                  </p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {canAccessSettings && (
-                  <Link
-                    to="/settings"
-                    onClick={closeSidebar}
-                    className="flex items-center justify-center gap-2 w-full px-4 py-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground rounded-lg transition-colors"
-                  >
-                    <Settings className="h-4 w-4" />
-                    <span>Settings</span>
-                  </Link>
-                )}
-                <button
-                  onClick={() => {
-                    onLogout();
-                    closeSidebar();
-                  }}
-                  className="flex items-center justify-center gap-2 w-full px-4 py-3 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive rounded-lg transition-colors"
+        <div
+          className={cn(
+            'absolute inset-x-0 inset-y-0 bg-background transition-[transform,opacity] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]',
+            isOpen ? 'translate-y-0 opacity-100' : '-translate-y-3 opacity-0'
+          )}
+          style={{ willChange: 'transform, opacity' }}
+        >
+          <nav className="px-4 pt-20 pb-6 space-y-2">
+            {filteredNavigation.map((item) => {
+              const isActive = location.pathname === item.href ||
+                (item.href !== '/' && location.pathname.startsWith(item.href));
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  onClick={closeSidebar}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
+                    isActive
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                  )}
                 >
-                  <LogOut className="h-4 w-4" />
-                  <span>Logout</span>
-                </button>
+                  <item.icon className="h-5 w-5" />
+                  <span>{item.name}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* User Section */}
+          <div className="border-t border-border p-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-foreground font-medium">
+                {user?.first_name?.[0] || 'A'}{user?.last_name?.[0] || 'U'}
               </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">
+                  {user?.first_name || 'Admin'} {user?.last_name}
+                </p>
+                <p className="text-xs text-muted-foreground capitalize">
+                  {role || user?.role || 'User'}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {canAccessSettings && (
+                <Link
+                  to="/settings"
+                  onClick={closeSidebar}
+                  className="flex items-center justify-center gap-2 w-full px-4 py-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground rounded-lg transition-colors"
+                >
+                  <Settings className="h-4 w-4" />
+                  <span>Settings</span>
+                </Link>
+              )}
+              <button
+                onClick={() => {
+                  onLogout();
+                  closeSidebar();
+                }}
+                className="flex items-center justify-center gap-2 w-full px-4 py-3 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive rounded-lg transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Logout</span>
+              </button>
             </div>
           </div>
         </div>
-      )}
+      </div>
+
+      <style>{`
+        @media (max-width: 1023px) {
+          .sidebar-desktop-only { display: none; }
+        }
+        @media (min-width: 1024px) {
+          .sidebar-mobile-only { display: none; }
+        }
+      `}</style>
     </>
   );
 }

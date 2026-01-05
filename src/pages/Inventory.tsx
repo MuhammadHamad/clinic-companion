@@ -51,7 +51,7 @@ import {
   ArrowDownCircle,
   RefreshCw,
   Trash2,
-  List,
+  Settings,
 } from 'lucide-react';
 import { useInventory } from '@/hooks';
 import { InventoryItem, InventoryCategory, InventoryStatus, MovementType } from '@/types';
@@ -163,6 +163,15 @@ export default function Inventory() {
     const q = params.get('q');
     if (q && q !== searchQuery) setSearchQuery(q);
   }, [location.search, searchQuery]);
+
+  const handleCategoryFilterChange = (value: string) => {
+    if (value === '__manage_categories__') {
+      setIsCategoryDialogOpen(true);
+      return;
+    }
+
+    setCategoryFilter(value);
+  };
 
   const generateItemCode = () => {
     try {
@@ -542,9 +551,9 @@ export default function Inventory() {
         </div>
 
         {/* Actions Bar */}
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
+        <div className="inventory-actions-bar flex flex-col gap-4">
+          <div className="inventory-actions-row flex flex-col sm:flex-row gap-3">
+            <div className="inventory-search relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search items..."
@@ -553,8 +562,8 @@ export default function Inventory() {
                 className="pl-9"
               />
             </div>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-full sm:w-40">
+            <Select value={categoryFilter} onValueChange={handleCategoryFilterChange}>
+              <SelectTrigger className="inventory-category-trigger w-full sm:w-40">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
@@ -563,10 +572,20 @@ export default function Inventory() {
                 {categories.map(cat => (
                   <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                 ))}
+                <div className="my-1 h-px bg-border" role="separator" />
+                <SelectItem
+                  value="__manage_categories__"
+                  className="text-primary focus:text-primary"
+                >
+                  <span className="flex items-center gap-2">
+                    <Settings className="h-4 w-4" />
+                    <span className="font-medium">Manage Categories</span>
+                  </span>
+                </SelectItem>
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-36">
+              <SelectTrigger className="inventory-status-trigger w-36">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -577,17 +596,48 @@ export default function Inventory() {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <Button variant="outline" onClick={() => setIsCategoryDialogOpen(true)} className="w-full sm:w-auto">
-              <List className="h-4 w-4 mr-2" />
-              Manage Categories
-            </Button>
+          <div className="inventory-buttons-row flex flex-col sm:flex-row gap-2">
             <Button onClick={openCreateForm} className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               Add Item
             </Button>
           </div>
         </div>
+
+        <style>{`
+          @media (hover: hover) and (pointer: fine) {
+            .inventory-actions-bar {
+              flex-direction: row;
+              align-items: center;
+              gap: 0.75rem;
+            }
+            .inventory-actions-row {
+              flex: 1;
+              flex-direction: row;
+              align-items: center;
+              flex-wrap: nowrap;
+              gap: 0.75rem;
+            }
+            .inventory-search {
+              flex: 0 1 36rem;
+              max-width: 36rem;
+            }
+            .inventory-category-trigger {
+              width: 10rem;
+            }
+            .inventory-status-trigger {
+              width: 9rem;
+            }
+            .inventory-buttons-row {
+              flex-direction: row;
+              justify-content: flex-end;
+            }
+            .inventory-buttons-row > button {
+              width: auto !important;
+              white-space: nowrap;
+            }
+          }
+        `}</style>
 
         {/* Items Table */}
         <div className="bg-card rounded-xl border border-border overflow-hidden">
@@ -621,13 +671,9 @@ export default function Inventory() {
                             <p className="text-sm text-muted-foreground mb-4">
                               Examples: Instruments, Materials, Consumables, Medications, Equipment
                             </p>
-                            <Button 
-                              onClick={() => setIsCategoryDialogOpen(true)}
-                              className="mx-auto"
-                            >
-                              <List className="h-4 w-4 mr-2" />
-                              Create Your First Category
-                            </Button>
+                            <p className="text-muted-foreground">
+                              Get started by adding your first inventory item
+                            </p>
                           </div>
                         </div>
                       ) : (
@@ -635,9 +681,13 @@ export default function Inventory() {
                           <Package className="h-12 w-12 mx-auto text-muted-foreground" />
                           <div>
                             <h3 className="font-semibold text-lg">No items found</h3>
-                            <p className="text-muted-foreground">
-                              Get started by adding your first inventory item
+                            <p className="text-muted-foreground mb-4">
+                              Add your first inventory item to start tracking stock.
                             </p>
+                            <Button onClick={openCreateForm} className="mx-auto">
+                              <Plus className="h-4 w-4 mr-2" />
+                              Add Item
+                            </Button>
                           </div>
                         </div>
                       )
