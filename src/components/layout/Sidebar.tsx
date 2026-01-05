@@ -201,65 +201,69 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
           )}
           style={{ willChange: 'transform, opacity' }}
         >
-          <nav className="px-4 pt-20 pb-6 space-y-2">
-            {filteredNavigation.map((item) => {
-              const isActive = location.pathname === item.href ||
-                (item.href !== '/' && location.pathname.startsWith(item.href));
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  onClick={closeSidebar}
-                  className={cn(
-                    'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                  )}
-                >
-                  <item.icon className="h-5 w-5" />
-                  <span>{item.name}</span>
-                </Link>
-              );
-            })}
-          </nav>
+          <div className="flex h-full flex-col pt-20">
+            <nav className="px-4 space-y-2">
+              {filteredNavigation.map((item) => {
+                const isActive = location.pathname === item.href ||
+                  (item.href !== '/' && location.pathname.startsWith(item.href));
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href}
+                    onClick={closeSidebar}
+                    className={cn(
+                      'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
+                      isActive
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                    )}
+                  >
+                    <item.icon className="h-5 w-5" />
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
+            </nav>
 
-          {/* User Section */}
-          <div className="border-t border-border p-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-foreground font-medium">
-                {user?.first_name?.[0] || 'A'}{user?.last_name?.[0] || 'U'}
+            <div className="mt-auto p-4 pt-6">
+              <div className="rounded-xl border border-border bg-card/40 backdrop-blur-sm p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-foreground font-medium">
+                    {user?.first_name?.[0] || 'A'}{user?.last_name?.[0] || 'U'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate">
+                      {user?.first_name || 'Admin'} {user?.last_name}
+                    </p>
+                    <p className="text-xs text-muted-foreground capitalize">
+                      {role || user?.role || 'User'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  {canAccessSettings && (
+                    <Link
+                      to="/settings"
+                      onClick={closeSidebar}
+                      className="flex items-center gap-3 w-full px-3 py-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground rounded-lg transition-colors"
+                    >
+                      <Settings className="h-4 w-4" />
+                      <span>Settings</span>
+                    </Link>
+                  )}
+                  <button
+                    onClick={() => {
+                      onLogout();
+                      closeSidebar();
+                    }}
+                    className="flex items-center gap-3 w-full px-3 py-3 text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive rounded-lg transition-colors"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Logout</span>
+                  </button>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">
-                  {user?.first_name || 'Admin'} {user?.last_name}
-                </p>
-                <p className="text-xs text-muted-foreground capitalize">
-                  {role || user?.role || 'User'}
-                </p>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {canAccessSettings && (
-                <Link
-                  to="/settings"
-                  onClick={closeSidebar}
-                  className="flex items-center justify-center gap-2 w-full px-4 py-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground rounded-lg transition-colors"
-                >
-                  <Settings className="h-4 w-4" />
-                  <span>Settings</span>
-                </Link>
-              )}
-              <button
-                onClick={() => {
-                  onLogout();
-                  closeSidebar();
-                }}
-                className="flex items-center justify-center gap-2 w-full px-4 py-3 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive rounded-lg transition-colors"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Logout</span>
-              </button>
             </div>
           </div>
         </div>

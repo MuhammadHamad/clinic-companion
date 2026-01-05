@@ -103,11 +103,11 @@ export const paymentSchema = z.object({
   amount: z.number()
     .min(0.01, 'Amount must be greater than 0')
     .max(999999, 'Amount must be less than 1,000,000'),
-  payment_method: z.enum(['cash', 'card', 'bank_transfer', 'other'])
-    .refine((val) => val !== undefined, 'Payment method is required'),
+  payment_method: z.enum(['cash', 'card', 'bank_transfer', 'cheque']),
   payment_date: z.string()
-    .min(1, 'Payment date is required')
+    .optional()
     .refine((date) => {
+      if (!date) return true;
       const payment = new Date(date);
       const today = new Date();
       return payment <= today;
