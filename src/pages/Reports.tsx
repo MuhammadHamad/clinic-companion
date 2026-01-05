@@ -195,42 +195,49 @@ export default function Reports() {
     <div className="min-h-screen">
       <Header title="Reports" subtitle="View analytics and generate reports" />
       
-      <div className="p-6 animate-fade-in">
+      <div className="p-4 sm:p-6 animate-fade-in overflow-x-hidden">
         <Tabs defaultValue="revenue" className="space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between gap-4">
-            <TabsList>
-              <TabsTrigger value="revenue" className="gap-2">
-                <DollarSign className="h-4 w-4" />
-                Revenue
-              </TabsTrigger>
-              <TabsTrigger value="outstanding" className="gap-2">
-                <AlertTriangle className="h-4 w-4" />
-                Outstanding
-              </TabsTrigger>
-              <TabsTrigger value="inventory" className="gap-2">
-                <Package className="h-4 w-4" />
-                Inventory
-              </TabsTrigger>
-            </TabsList>
+          <div className="flex flex-col gap-4">
+            <div className="overflow-x-auto">
+              <TabsList className="w-max min-w-full justify-start">
+                <TabsTrigger value="revenue" className="gap-2">
+                  <DollarSign className="h-4 w-4" />
+                  Revenue
+                </TabsTrigger>
+                <TabsTrigger value="outstanding" className="gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Outstanding
+                </TabsTrigger>
+                <TabsTrigger value="inventory" className="gap-2">
+                  <Package className="h-4 w-4" />
+                  Inventory
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
-            <div className="flex gap-3 items-center">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="date"
-                  value={dateRange.start}
-                  onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
-                  className="w-36"
-                />
-                <span className="text-muted-foreground">to</span>
-                <Input
-                  type="date"
-                  value={dateRange.end}
-                  onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
-                  className="w-36"
-                />
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Date</span>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <Input
+                    type="date"
+                    value={dateRange.start}
+                    onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                    className="w-full sm:w-36"
+                  />
+                  <span className="hidden sm:inline text-muted-foreground">to</span>
+                  <Input
+                    type="date"
+                    value={dateRange.end}
+                    onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                    className="w-full sm:w-36"
+                  />
+                </div>
               </div>
-              <Button variant="outline">
+              <Button variant="outline" className="w-full sm:w-auto">
                 <Download className="h-4 w-4 mr-2" />
                 Export
               </Button>
@@ -240,7 +247,7 @@ export default function Reports() {
           {/* Revenue Report */}
           <TabsContent value="revenue" className="space-y-6">
             {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Card>
                 <CardContent className="p-4 flex items-center gap-4">
                   <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -355,7 +362,7 @@ export default function Reports() {
                           axisLine={false} 
                           tickLine={false}
                           tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                          width={80}
+                          width={90}
                         />
                         <Tooltip
                           contentStyle={{
@@ -393,29 +400,33 @@ export default function Reports() {
                   <CardTitle className="text-lg">Aging Analysis</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Age Range</TableHead>
-                        <TableHead className="text-right">Amount</TableHead>
-                        <TableHead className="text-right">Invoices</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {agingAnalysis.map((item) => (
-                        <TableRow key={item.range}>
-                          <TableCell className="font-medium">{item.range}</TableCell>
-                          <TableCell className={cn(
-                            'text-right font-medium',
-                            item.range === '90+ days' && item.amount > 0 && 'text-destructive'
-                          )}>
-                            Rs. {item.amount.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-right">{item.count}</TableCell>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="whitespace-nowrap">Age Range</TableHead>
+                          <TableHead className="text-right whitespace-nowrap">Amount</TableHead>
+                          <TableHead className="text-right whitespace-nowrap">Invoices</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {agingAnalysis.map((item) => (
+                          <TableRow key={item.range}>
+                            <TableCell className="font-medium whitespace-nowrap">{item.range}</TableCell>
+                            <TableCell
+                              className={cn(
+                                'text-right font-medium whitespace-nowrap',
+                                item.range === '90+ days' && item.amount > 0 && 'text-destructive'
+                              )}
+                            >
+                              Rs. {item.amount.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-right whitespace-nowrap">{item.count}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -425,38 +436,44 @@ export default function Reports() {
                   <CardTitle className="text-lg">Outstanding Invoices</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Patient</TableHead>
-                        <TableHead className="text-right">Balance</TableHead>
-                        <TableHead className="text-right">Days</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {outstandingInvoices.map((invoice) => {
-                        const daysOld = Math.floor((new Date().getTime() - new Date(invoice.invoice_date).getTime()) / (1000 * 60 * 60 * 24));
-                        return (
-                          <TableRow key={invoice.id}>
-                            <TableCell>
-                              <div className="font-medium">{invoice.patient?.first_name} {invoice.patient?.last_name}</div>
-                              <div className="text-sm text-muted-foreground">{invoice.invoice_number}</div>
-                            </TableCell>
-                            <TableCell className="text-right font-medium text-destructive">
-                              Rs. {invoice.balance.toLocaleString()}
-                            </TableCell>
-                            <TableCell className={cn(
-                              'text-right',
-                              daysOld > 30 && 'text-warning',
-                              daysOld > 90 && 'text-destructive'
-                            )}>
-                              {daysOld}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="whitespace-nowrap">Patient</TableHead>
+                          <TableHead className="text-right whitespace-nowrap">Balance</TableHead>
+                          <TableHead className="text-right whitespace-nowrap">Days</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {outstandingInvoices.map((invoice) => {
+                          const daysOld = Math.floor(
+                            (new Date().getTime() - new Date(invoice.invoice_date).getTime()) / (1000 * 60 * 60 * 24)
+                          );
+                          return (
+                            <TableRow key={invoice.id}>
+                              <TableCell className="min-w-[220px]">
+                                <div className="font-medium">{invoice.patient?.first_name} {invoice.patient?.last_name}</div>
+                                <div className="text-sm text-muted-foreground whitespace-nowrap">{invoice.invoice_number}</div>
+                              </TableCell>
+                              <TableCell className="text-right font-medium text-destructive whitespace-nowrap">
+                                Rs. {invoice.balance.toLocaleString()}
+                              </TableCell>
+                              <TableCell
+                                className={cn(
+                                  'text-right whitespace-nowrap',
+                                  daysOld > 30 && 'text-warning',
+                                  daysOld > 90 && 'text-destructive'
+                                )}
+                              >
+                                {daysOld}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -464,7 +481,7 @@ export default function Reports() {
 
           {/* Inventory Report */}
           <TabsContent value="inventory" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Card>
                 <CardContent className="p-4 flex items-center gap-4">
                   <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -567,47 +584,53 @@ export default function Reports() {
                   <CardTitle className="text-lg">Items Needing Attention</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Item</TableHead>
-                        <TableHead className="text-center">Qty</TableHead>
-                        <TableHead className="text-center">Min</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {items
-                        .filter(i => i.status !== 'in_stock')
-                        .map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell>
-                              <div className="font-medium">{item.item_name}</div>
-                              <div className="text-sm text-muted-foreground">{item.item_code}</div>
-                            </TableCell>
-                            <TableCell className={cn(
-                              'text-center font-medium',
-                              item.status === 'out_of_stock' && 'text-destructive',
-                              item.status === 'low_stock' && 'text-warning'
-                            )}>
-                              {item.current_quantity}
-                            </TableCell>
-                            <TableCell className="text-center text-muted-foreground">
-                              {item.minimum_threshold}
-                            </TableCell>
-                            <TableCell>
-                              <span className={cn(
-                                'status-badge',
-                                item.status === 'low_stock' && 'bg-warning/10 text-warning',
-                                item.status === 'out_of_stock' && 'bg-destructive/10 text-destructive'
-                              )}>
-                                {item.status === 'low_stock' ? 'Low Stock' : 'Out of Stock'}
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                    </TableBody>
-                  </Table>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="whitespace-nowrap">Item</TableHead>
+                          <TableHead className="text-center whitespace-nowrap">Qty</TableHead>
+                          <TableHead className="text-center whitespace-nowrap">Min</TableHead>
+                          <TableHead className="whitespace-nowrap">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {items
+                          .filter(i => i.status !== 'in_stock')
+                          .map((item) => (
+                            <TableRow key={item.id}>
+                              <TableCell className="min-w-[220px]">
+                                <div className="font-medium">{item.item_name}</div>
+                                <div className="text-sm text-muted-foreground whitespace-nowrap">{item.item_code}</div>
+                              </TableCell>
+                              <TableCell
+                                className={cn(
+                                  'text-center font-medium whitespace-nowrap',
+                                  item.status === 'out_of_stock' && 'text-destructive',
+                                  item.status === 'low_stock' && 'text-warning'
+                                )}
+                              >
+                                {item.current_quantity}
+                              </TableCell>
+                              <TableCell className="text-center text-muted-foreground whitespace-nowrap">
+                                {item.minimum_threshold}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <span
+                                  className={cn(
+                                    'status-badge',
+                                    item.status === 'low_stock' && 'bg-warning/10 text-warning',
+                                    item.status === 'out_of_stock' && 'bg-destructive/10 text-destructive'
+                                  )}
+                                >
+                                  {item.status === 'low_stock' ? 'Low Stock' : 'Out of Stock'}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
             </div>
