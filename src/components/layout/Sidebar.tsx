@@ -1,5 +1,5 @@
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useState } from 'react';
 import {
   LayoutDashboard,
   Users,
@@ -9,7 +9,6 @@ import {
   Settings,
   LogOut,
   Stethoscope,
-  Menu,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -40,9 +39,9 @@ interface SidebarProps {
 
 export function Sidebar({ onLogout, user }: SidebarProps) {
   const location = useLocation();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
-  const { role, isSuperAdmin, canAccessSettings, isLoading: isRoleLoading } = useUserRole();
+  const { role, isSuperAdmin, canAccessSettings } = useUserRole();
   const { activeClinic } = useTenant();
 
   if (isSuperAdmin) {
@@ -58,6 +57,28 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
     return item.allowedRoles.includes(role);
   });
 
+  const openSidebar = () => {
+    setIsOpen(true);
+    // Lock body scroll
+    document.body.style.overflow = 'hidden';
+    document.body.classList.add('scroll-locked');
+  };
+
+  const closeSidebar = () => {
+    setIsOpen(false);
+    // Unlock body scroll
+    document.body.style.overflow = '';
+    document.body.classList.remove('scroll-locked');
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = '';
+      document.body.classList.remove('scroll-locked');
+    };
+  }, []);
+
   return (
     <>
       {/* Mobile Menu Button */}
@@ -65,27 +86,15 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
         <Button
           variant="outline"
           size="icon"
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          onClick={openSidebar}
           className="bg-background"
         >
-          {isMobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          <Stethoscope className="h-4 w-4" />
         </Button>
       </div>
 
-      {/* Mobile Overlay */}
-      {isMobileMenuOpen && (
-        <div 
-          className="lg:hidden fixed inset-0 z-40 bg-black/50"
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside className={cn(
-        "fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar border-r border-sidebar-border transform transition-transform duration-200 ease-in-out",
-        "lg:translate-x-0",
-        isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-      )}>
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:fixed lg:left-0 lg:top-0 lg:z-40 lg:h-screen lg:w-64 lg:bg-sidebar lg:border-r lg:border-sidebar-border">
         <div className="flex h-full flex-col">
           {/* Logo */}
           <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
@@ -108,7 +117,6 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
                 <Link
                   key={item.name}
                   to={item.href}
-                  onClick={() => setIsMobileMenuOpen(false)}
                   className={cn(
                     'sidebar-item',
                     isActive && 'sidebar-item-active'
@@ -140,7 +148,6 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
               {canAccessSettings && (
                 <Link
                   to="/settings"
-                  onClick={() => setIsMobileMenuOpen(false)}
                   className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors"
                 >
                   <Settings className="h-4 w-4" />
@@ -148,10 +155,7 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
                 </Link>
               )}
               <button
-                onClick={() => {
-                  onLogout();
-                  setIsMobileMenuOpen(false);
-                }}
+                onClick={onLogout}
                 className={cn(
                   "flex items-center justify-center px-3 py-2 text-sm text-sidebar-muted hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors",
                   !canAccessSettings && "flex-1 gap-2"
@@ -164,6 +168,122 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
           </div>
         </div>
       </aside>
+
+      {/* Full Screen Mobile Overlay */}
+      {isOpen && (
+        <div className="lg:hidden fixed inset-0 z-50">
+          {/* Backdrop with scroll lock */}
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={closeSidebar}
+          />
+          
+          {/* Slide-down content */}
+          <div 
+            className="absolute inset-x-0 top-0 bg-background border-b border-border transform transition-transform duration-300 ease-out"
+            style={{ 
+              animation: 'slideDown 0.3s ease-out',
+            }}
+          >
+            {/* Header with close button */}
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
+                  <Stethoscope className="h-5 w-5 text-primary-foreground" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h1 className="truncate text-base font-display font-semibold leading-tight tracking-tight text-foreground">
+                    {activeClinic?.name || 'Clinic Companion'}
+                  </h1>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={closeSidebar}
+                className="h-9 w-9"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            {/* Navigation */}
+            <nav className="px-4 py-6 space-y-2">
+              {filteredNavigation.map((item) => {
+                const isActive = location.pathname === item.href || 
+                  (item.href !== '/' && location.pathname.startsWith(item.href));
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href}
+                    onClick={closeSidebar}
+                    className={cn(
+                      'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
+                      isActive 
+                        ? 'bg-primary text-primary-foreground' 
+                        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                    )}
+                  >
+                    <item.icon className="h-5 w-5" />
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {/* User Section */}
+            <div className="border-t border-border p-4">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-foreground font-medium">
+                  {user?.first_name?.[0] || 'A'}{user?.last_name?.[0] || 'U'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {user?.first_name || 'Admin'} {user?.last_name}
+                  </p>
+                  <p className="text-xs text-muted-foreground capitalize">
+                    {role || user?.role || 'User'}
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {canAccessSettings && (
+                  <Link
+                    to="/settings"
+                    onClick={closeSidebar}
+                    className="flex items-center justify-center gap-2 w-full px-4 py-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground rounded-lg transition-colors"
+                  >
+                    <Settings className="h-4 w-4" />
+                    <span>Settings</span>
+                  </Link>
+                )}
+                <button
+                  onClick={() => {
+                    onLogout();
+                    closeSidebar();
+                  }}
+                  className="flex items-center justify-center gap-2 w-full px-4 py-3 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive rounded-lg transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Logout</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add slide-down animation */}
+      <style jsx>{`
+        @keyframes slideDown {
+          from {
+            transform: translateY(-100%);
+          }
+          to {
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </>
   );
 }
