@@ -10,6 +10,7 @@ import {
   LogOut,
   Stethoscope,
   X,
+  Menu,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/hooks';
@@ -81,90 +82,88 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
 
   return (
     <>
-      {/* Mobile Menu Button */}
-      <div className="lg:hidden fixed top-4 left-4 z-50">
+      {/* Mobile Menu Button - Top Right */}
+      <div className="lg:hidden fixed top-4 right-4 z-50">
         <Button
           variant="outline"
           size="icon"
-          onClick={openSidebar}
+          onClick={isOpen ? closeSidebar : openSidebar}
           className="bg-background"
         >
-          <Stethoscope className="h-4 w-4" />
+          {isOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
         </Button>
       </div>
 
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:fixed lg:left-0 lg:top-0 lg:z-40 lg:h-screen lg:w-64 lg:bg-sidebar lg:border-r lg:border-sidebar-border">
-        <div className="flex h-full flex-col">
-          {/* Logo */}
-          <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-              <Stethoscope className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="truncate text-base font-display font-semibold leading-tight tracking-tight text-sidebar-foreground">
-                {activeClinic?.name || 'Clinic Companion'}
-              </h1>
-            </div>
+      {/* Desktop Sidebar - Always Visible */}
+      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:z-40 lg:h-screen lg:w-64 lg:bg-sidebar lg:border-r lg:border-sidebar-border">
+        {/* Logo */}
+        <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
+            <Stethoscope className="h-5 w-5 text-primary-foreground" />
           </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-base font-display font-semibold leading-tight tracking-tight text-sidebar-foreground">
+              {activeClinic?.name || 'Clinic Companion'}
+            </h1>
+          </div>
+        </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 space-y-1 px-3 py-4">
-            {filteredNavigation.map((item) => {
-              const isActive = location.pathname === item.href || 
-                (item.href !== '/' && location.pathname.startsWith(item.href));
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={cn(
-                    'sidebar-item',
-                    isActive && 'sidebar-item-active'
-                  )}
-                >
-                  <item.icon className="h-5 w-5" />
-                  <span>{item.name}</span>
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* User Section */}
-          <div className="border-t border-sidebar-border p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sidebar-accent text-sidebar-foreground font-medium">
-                {user?.first_name?.[0] || 'A'}{user?.last_name?.[0] || 'U'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-sidebar-foreground truncate">
-                  {user?.first_name || 'Admin'} {user?.last_name}
-                </p>
-                <p className="text-xs text-sidebar-muted capitalize">
-                  {role || user?.role || 'User'}
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              {canAccessSettings && (
-                <Link
-                  to="/settings"
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors"
-                >
-                  <Settings className="h-4 w-4" />
-                  <span className="hidden sm:inline">Settings</span>
-                </Link>
-              )}
-              <button
-                onClick={onLogout}
+        {/* Navigation */}
+        <nav className="flex-1 space-y-1 px-3 py-4">
+          {filteredNavigation.map((item) => {
+            const isActive = location.pathname === item.href || 
+              (item.href !== '/' && location.pathname.startsWith(item.href));
+            return (
+              <Link
+                key={item.name}
+                to={item.href}
                 className={cn(
-                  "flex items-center justify-center px-3 py-2 text-sm text-sidebar-muted hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors",
-                  !canAccessSettings && "flex-1 gap-2"
+                  'sidebar-item',
+                  isActive && 'sidebar-item-active'
                 )}
               >
-                <LogOut className="h-4 w-4" />
-                {!canAccessSettings && <span className="hidden sm:inline">Logout</span>}
-              </button>
+                <item.icon className="h-5 w-5" />
+                <span>{item.name}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* User Section */}
+        <div className="border-t border-sidebar-border p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sidebar-accent text-sidebar-foreground font-medium">
+              {user?.first_name?.[0] || 'A'}{user?.last_name?.[0] || 'U'}
             </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-sidebar-foreground truncate">
+                {user?.first_name || 'Admin'} {user?.last_name}
+              </p>
+              <p className="text-xs text-sidebar-muted capitalize">
+                {role || user?.role || 'User'}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            {canAccessSettings && (
+              <Link
+                to="/settings"
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors"
+              >
+                <Settings className="h-4 w-4" />
+                <span className="hidden sm:inline">Settings</span>
+              </Link>
+            )}
+            <button
+              onClick={onLogout}
+              className={cn(
+                "flex items-center justify-center px-3 py-2 text-sm text-sidebar-muted hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors",
+                !canAccessSettings && "flex-1 gap-2"
+              )}
+            >
+              <LogOut className="h-4 w-4" />
+              {!canAccessSettings && <span className="hidden sm:inline">Logout</span>}
+            </button>
           </div>
         </div>
       </aside>
@@ -178,9 +177,9 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
             onClick={closeSidebar}
           />
           
-          {/* Slide-down content */}
+          {/* Full-screen slide-down content */}
           <div 
-            className="absolute inset-x-0 top-0 bg-background border-b border-border transform transition-transform duration-300 ease-out"
+            className="absolute inset-x-0 inset-y-0 bg-background transform transition-transform duration-300 ease-out"
             style={{ 
               animation: 'slideDown 0.3s ease-out',
             }}
@@ -272,18 +271,6 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
           </div>
         </div>
       )}
-
-      {/* Add slide-down animation */}
-      <style jsx>{`
-        @keyframes slideDown {
-          from {
-            transform: translateY(-100%);
-          }
-          to {
-            transform: translateY(0);
-          }
-        }
-      `}</style>
     </>
   );
 }
