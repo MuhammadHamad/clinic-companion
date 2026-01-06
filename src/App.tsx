@@ -25,7 +25,17 @@ import SaasOverview from "./pages/saas/SaasOverview";
 import SaasClinics from "./pages/saas/SaasClinics";
 import SaasUsers from "./pages/saas/SaasUsers";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: false,
+      staleTime: 60_000,
+      gcTime: 10 * 60_000,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

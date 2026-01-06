@@ -86,6 +86,11 @@ export interface Invoice {
   id: string;
   invoice_number: string;
   patient_id: string;
+  visit_id?: string;
+  is_void?: boolean;
+  voided_at?: string;
+  voided_reason?: string;
+  voided_by?: string;
   invoice_date: string;
   due_date?: string;
   subtotal: number;
@@ -106,12 +111,35 @@ export interface Payment {
   id: string;
   invoice_id: string;
   patient_id: string;
+  visit_id?: string;
   payment_date: string;
   amount: number;
   payment_method: PaymentMethod;
   reference_number?: string;
   notes?: string;
   created_at: string;
+}
+
+export interface Visit {
+  id: string;
+  patient_id: string;
+  visit_date: string;
+  visit_number: number;
+  created_at: string;
+}
+
+export type InvoiceAdjustmentType = 'credit' | 'debit';
+
+export interface InvoiceAdjustment {
+  id: string;
+  invoice_id: string;
+  patient_id: string;
+  adjustment_date: string;
+  type: InvoiceAdjustmentType;
+  amount: number;
+  reason?: string;
+  created_at: string;
+  created_by?: string;
 }
 
 // Inventory types
