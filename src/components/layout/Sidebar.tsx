@@ -11,6 +11,8 @@ import {
   Stethoscope,
   X,
   Menu,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/hooks';
@@ -41,6 +43,7 @@ interface SidebarProps {
 export function Sidebar({ onLogout, user }: SidebarProps) {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => document.documentElement.classList.contains('dark'));
 
   const { role, isSuperAdmin, canAccessSettings } = useUserRole();
   const { activeClinic } = useTenant();
@@ -79,6 +82,34 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
       document.body.classList.remove('scroll-locked');
     };
   }, []);
+
+  const setDarkMode = (enabled: boolean) => {
+    setIsDarkMode(enabled);
+    document.documentElement.classList.toggle('dark', enabled);
+    localStorage.setItem('color-mode', enabled ? 'dark' : 'light');
+  };
+
+  const ThemeToggle3D = ({ className }: { className?: string }) => {
+    return (
+      <button
+        type="button"
+        aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+        aria-pressed={isDarkMode}
+        onClick={() => setDarkMode(!isDarkMode)}
+        className={cn('theme-toggle-3d', isDarkMode && 'is-dark', className)}
+      >
+        <span className="theme-toggle-3d__surface" aria-hidden="true">
+          <span className="theme-toggle-3d__icon" aria-hidden="true">
+            {isDarkMode ? (
+              <Moon className="h-5 w-5" />
+            ) : (
+              <Sun className="h-5 w-5" />
+            )}
+          </span>
+        </span>
+      </button>
+    );
+  };
 
   return (
     <>
@@ -153,6 +184,10 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
                   {role || user?.role || 'User'}
                 </p>
               </div>
+            </div>
+
+            <div className="mb-3 flex items-center justify-center">
+              <ThemeToggle3D />
             </div>
             <div className="flex gap-2">
               {canAccessSettings && (
@@ -239,6 +274,10 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
                       {role || user?.role || 'User'}
                     </p>
                   </div>
+                </div>
+
+                <div className="mt-4 flex items-center justify-center">
+                  <ThemeToggle3D />
                 </div>
 
                 <div className="mt-4 space-y-2">

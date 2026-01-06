@@ -26,6 +26,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useInvoices, useInventory, usePatients } from '@/hooks';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
+import { useTenant } from '@/contexts/TenantContext';
 
 const COLORS = ['hsl(217, 91%, 60%)', 'hsl(160, 84%, 39%)', 'hsl(38, 92%, 50%)', 'hsl(280, 65%, 60%)', 'hsl(340, 75%, 55%)'];
 
@@ -33,10 +34,15 @@ export default function Reports() {
   const { invoices } = useInvoices();
   const { items } = useInventory();
   const { patients } = usePatients();
+  const { activeClinic } = useTenant();
+  const [activeTab, setActiveTab] = useState<'revenue' | 'outstanding' | 'inventory'>('revenue');
   const [dateRange, setDateRange] = useState({
     start: new Date(new Date().setDate(1)).toISOString().split('T')[0], // First day of month
     end: new Date().toISOString().split('T')[0], // Today
   });
+
+  // Filter out void invoices for accurate reporting
+  const activeInvoices = useMemo(() => invoices.filter((i) => !i.is_void), [invoices]);
 
   const [paymentBreakdown, setPaymentBreakdown] = useState<{
     method: string;
@@ -66,73 +72,107 @@ export default function Reports() {
     };
   }, [paymentsInRange]);
 
-  // Revenue Report Data
+  // Invoices filtered by selected invoice_date range (excluding void)
+  const invoicesInRange = useMemo(() => {
+    if (!dateRange.start || !dateRange.end) return activeInvoices;
+
+    const startDate = new Date(dateRange.start);
+    const endDate = new Date(dateRange.end);
+    endDate.setHours(23, 59, 59, 999);
+
+    return activeInvoices.filter((inv) => {
+      if (!inv.invoice_date) return false;
+      const invDate = new Date(inv.invoice_date);
+      return invDate >= startDate && invDate <= endDate;
+    });
+  }, [activeInvoices, dateRange.start, dateRange.end]);
+
+  // Revenue Report Data - using invoices in date range only
   const revenueData = {
     total_revenue:
       paymentsStats.totalRevenue > 0
         ? paymentsStats.totalRevenue
-        : invoices.filter((i) => i.status === 'paid').reduce((sum, i) => sum + i.total_amount, 0),
-    total_patients: new Set(invoices.map(i => i.patient_id)).size,
-    total_invoices: paymentsStats.invoiceCount > 0 ? paymentsStats.invoiceCount : invoices.length,
+        : invoicesInRange.filter((i) => i.status === 'paid').reduce((sum, i) => sum + i.total_amount, 0),
+    total_patients: patients.length,
+    total_invoices: paymentsStats.invoiceCount > 0 ? paymentsStats.invoiceCount : invoicesInRange.length,
     average_transaction: 0,
   };
   revenueData.average_transaction = revenueData.total_invoices > 0 
     ? Math.round(revenueData.total_revenue / revenueData.total_invoices) 
     : 0;
 
-  // Invoices filtered by selected invoice_date range
-  const invoicesInRange = useMemo(() => {
-    if (!dateRange.start || !dateRange.end) return invoices;
-
-    const startDate = new Date(dateRange.start);
-    const endDate = new Date(dateRange.end);
-    endDate.setHours(23, 59, 59, 999);
-
-    return invoices.filter((inv) => {
-      if (!inv.invoice_date) return false;
-      const invDate = new Date(inv.invoice_date);
-      return invDate >= startDate && invDate <= endDate;
-    });
-  }, [invoices, dateRange.start, dateRange.end]);
-
-  // Revenue by Treatment Type from invoice items on paid invoices in the selected period
+  // Revenue by Treatment Type - using same data source as total revenue for consistency
   const treatmentBreakdown = useMemo(() => {
     const map = new Map<string, { name: string; revenue: number; count: number }>();
 
+    const paidByInvoiceId = new Map<string, number>();
+    paymentsInRange.forEach((p) => {
+      if (!p.invoice_id) return;
+      paidByInvoiceId.set(p.invoice_id, (paidByInvoiceId.get(p.invoice_id) || 0) + (Number(p.amount) || 0));
+    });
+
+    const shouldUsePayments = paymentsStats.totalRevenue > 0;
+
     invoicesInRange
-      .filter((inv) => inv.status === 'paid')
+      .filter((inv) => (shouldUsePayments ? (inv.status === 'paid' || inv.status === 'partial') : inv.status === 'paid'))
       .forEach((inv) => {
-        (inv.items || []).forEach((item) => {
+        const targetRevenue = shouldUsePayments ? (paidByInvoiceId.get(inv.id) || 0) : Number(inv.total_amount || 0);
+        if (targetRevenue <= 0) return;
+
+        const items = inv.items || [];
+        const itemsSum = items.reduce((sum, it) => sum + (Number(it.total) || 0), 0);
+
+        if (!items.length || itemsSum <= 0) {
+          const key = 'Other';
+          const existing = map.get(key) || { name: key, revenue: 0, count: 0 };
+          existing.revenue += targetRevenue;
+          existing.count += 1;
+          map.set(key, existing);
+          return;
+        }
+
+        items.forEach((item) => {
           const name = item.description || 'Other';
           const existing = map.get(name) || { name, revenue: 0, count: 0 };
-          existing.revenue += item.total;
+          const share = (Number(item.total) || 0) / itemsSum;
+          existing.revenue += targetRevenue * share;
           existing.count += 1;
           map.set(name, existing);
         });
       });
 
-    return Array.from(map.values())
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 6);
-  }, [invoicesInRange]);
+    const sorted = Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
+    const maxBars = 6;
+    if (sorted.length <= maxBars) return sorted;
 
-  // Payment Method Breakdown from real payments data, scoped by RLS (per clinic) and dateRange
+    const top = sorted.slice(0, maxBars - 1);
+    const otherTotal = sorted.slice(maxBars - 1).reduce((sum, row) => sum + row.revenue, 0);
+    const otherCount = sorted.slice(maxBars - 1).reduce((sum, row) => sum + row.count, 0);
+
+    return [...top, { name: 'Other', revenue: otherTotal, count: otherCount }];
+  }, [invoicesInRange, paymentsInRange, paymentsStats.totalRevenue]);
+
+  // Payment Method Breakdown - aligned with invoice date ranges for consistency
   useEffect(() => {
     const fetchPaymentBreakdown = async () => {
       try {
         setIsLoadingPayments(true);
-        let query = supabase
+        
+        // Get invoice IDs in the selected date range first
+        const invoiceIdsInRange = invoicesInRange.map(inv => inv.id);
+        
+        if (invoiceIdsInRange.length === 0) {
+          setPaymentsInRange([]);
+          setPaymentBreakdown([]);
+          return;
+        }
+
+        // Fetch payments for these invoices only
+        const { data, error } = await supabase
           .from('payments')
-          .select('invoice_id, payment_method, amount, payment_date');
+          .select('invoice_id, payment_method, amount, payment_date')
+          .in('invoice_id', invoiceIdsInRange);
 
-        if (dateRange.start) {
-          query = query.gte('payment_date', dateRange.start);
-        }
-        if (dateRange.end) {
-          query = query.lte('payment_date', dateRange.end);
-        }
-
-        const { data, error } = await query;
         if (error) throw error;
 
         const payments = (data || []).map((p: any) => ({
@@ -163,18 +203,42 @@ export default function Reports() {
     };
 
     fetchPaymentBreakdown();
-  }, [dateRange.start, dateRange.end]);
+  }, [invoicesInRange]);
 
-  // Outstanding Report Data
-  const outstandingInvoices = invoices.filter(i => i.status !== 'paid');
+  // Outstanding Report Data - excluding void invoices
+  const outstandingInvoices = activeInvoices.filter(i => i.status !== 'paid');
   const totalOutstanding = outstandingInvoices.reduce((sum, i) => sum + i.balance, 0);
 
-  const agingAnalysis = [
-    { range: '0-30 days', amount: 8500, count: 2 },
-    { range: '31-60 days', amount: 5000, count: 1 },
-    { range: '61-90 days', amount: 0, count: 0 },
-    { range: '90+ days', amount: 15000, count: 1 },
-  ];
+  // Real Aging Analysis based on actual invoice dates
+  const agingAnalysis = useMemo(() => {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    
+    const aging = [
+      { range: '0-30 days', amount: 0, count: 0 },
+      { range: '31-60 days', amount: 0, count: 0 },
+      { range: '61-90 days', amount: 0, count: 0 },
+      { range: '90+ days', amount: 0, count: 0 },
+    ];
+
+    outstandingInvoices.forEach(invoice => {
+      if (!invoice.invoice_date) return;
+      
+      const invoiceDate = new Date(invoice.invoice_date);
+      const daysOverdue = Math.floor((today.getTime() - invoiceDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      let categoryIndex;
+      if (daysOverdue <= 30) categoryIndex = 0;
+      else if (daysOverdue <= 60) categoryIndex = 1;
+      else if (daysOverdue <= 90) categoryIndex = 2;
+      else categoryIndex = 3;
+      
+      aging[categoryIndex].amount += invoice.balance || 0;
+      aging[categoryIndex].count += 1;
+    });
+
+    return aging;
+  }, [outstandingInvoices]);
 
   // Inventory Report Data
   const inventoryStats = {
@@ -191,12 +255,290 @@ export default function Reports() {
     { name: 'Equipment', value: 25000 },
   ];
 
+  const patientsRegisteredInRange = useMemo(() => {
+    if (!dateRange.start || !dateRange.end) return 0;
+    const startDate = new Date(`${dateRange.start}T00:00:00`);
+    const endDate = new Date(`${dateRange.end}T23:59:59`);
+
+    return patients.filter((p) => {
+      const created = p.created_at ? new Date(p.created_at) : null;
+      const fallback = p.registration_date ? new Date(`${p.registration_date}T00:00:00`) : null;
+      const d = created || fallback;
+      if (!d || Number.isNaN(d.getTime())) return false;
+      return d >= startDate && d <= endDate;
+    }).length;
+  }, [patients, dateRange.start, dateRange.end]);
+
+  const escapeHtml = (value: unknown) => {
+    const s = value === null || value === undefined ? '' : String(value);
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  };
+
+  const formatCurrency = (amount: unknown) => {
+    const n = Number(amount) || 0;
+    return `Rs. ${n.toLocaleString()}`;
+  };
+
+  const handleExport = () => {
+    const safeStart = dateRange.start || 'start';
+    const safeEnd = dateRange.end || 'end';
+
+    const clinicDisplayName = (activeClinic?.name || '').trim() || 'Clinic';
+
+    const titleByTab: Record<string, string> = {
+      revenue: 'Revenue Report',
+      outstanding: 'Outstanding Report',
+      inventory: 'Inventory Report',
+    };
+
+    const now = new Date();
+    const generatedAt = `${now.toISOString().slice(0, 10)} ${now.toTimeString().slice(0, 8)}`;
+
+    const section = (heading: string, body: string) => `
+      <div class="section">
+        <div class="section-title">${escapeHtml(heading)}</div>
+        ${body}
+      </div>
+    `;
+
+    const table = (headers: string[], rows: (string | number)[][]) => {
+      const thead = `<tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr>`;
+      const tbody = rows
+        .map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`)
+        .join('');
+      return `<table><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+    };
+
+    let bodyHtml = '';
+
+    if (activeTab === 'revenue') {
+      bodyHtml += section(
+        'Summary',
+        table(
+          ['Metric', 'Value'],
+          [
+            ['Total Revenue', formatCurrency(revenueData.total_revenue)],
+            ['Total Patients (All Time)', String(revenueData.total_patients)],
+            ['New Patients (In Range)', String(patientsRegisteredInRange)],
+            ['Total Invoices', String(revenueData.total_invoices)],
+            ['Avg Transaction', formatCurrency(revenueData.average_transaction)],
+          ],
+        ),
+      );
+
+      bodyHtml += section(
+        'Payment Method Breakdown',
+        table(
+          ['Method', 'Payments', 'Amount'],
+          paymentBreakdown.map((p) => [
+            String(p.method),
+            String(p.count),
+            formatCurrency(p.amount),
+          ]),
+        ),
+      );
+
+      bodyHtml += section(
+        'Revenue by Treatment Type',
+        table(
+          ['Treatment', 'Count', 'Revenue'],
+          treatmentBreakdown.map((t) => [
+            String(t.name),
+            String(t.count),
+            formatCurrency(Math.round(t.revenue)),
+          ]),
+        ),
+      );
+    }
+
+    if (activeTab === 'outstanding') {
+      bodyHtml += section(
+        'Summary',
+        table(
+          ['Metric', 'Value'],
+          [
+            ['Total Outstanding', formatCurrency(totalOutstanding)],
+            ['Outstanding Invoices', String(outstandingInvoices.length)],
+          ],
+        ),
+      );
+
+      bodyHtml += section(
+        'Aging Analysis',
+        table(
+          ['Range', 'Count', 'Amount'],
+          agingAnalysis.map((a) => [String(a.range), String(a.count), formatCurrency(a.amount)]),
+        ),
+      );
+
+      bodyHtml += section(
+        'Outstanding Invoices',
+        table(
+          ['Invoice #', 'Invoice Date', 'Patient', 'Status', 'Total', 'Paid', 'Balance'],
+          outstandingInvoices.map((inv) => [
+            String(inv.invoice_number || ''),
+            String(inv.invoice_date || ''),
+            String(inv.patient_id || ''),
+            String(inv.status || ''),
+            formatCurrency(inv.total_amount),
+            formatCurrency(inv.amount_paid),
+            formatCurrency(inv.balance),
+          ]),
+        ),
+      );
+    }
+
+    if (activeTab === 'inventory') {
+      bodyHtml += section(
+        'Summary',
+        table(
+          ['Metric', 'Value'],
+          [
+            ['Total Items', String(inventoryStats.total_items)],
+            ['Total Value', formatCurrency(Math.round(inventoryStats.total_value))],
+            ['Low Stock', String(inventoryStats.low_stock)],
+            ['Out of Stock', String(inventoryStats.out_of_stock)],
+          ],
+        ),
+      );
+
+      bodyHtml += section(
+        'Items',
+        table(
+          ['Name', 'Category', 'Status', 'Quantity', 'Unit Cost', 'Total Value'],
+          items.map((it: any) => {
+            const qty = Number(it.current_quantity) || 0;
+            const cost = Number(it.unit_cost) || 0;
+            return [
+              String(it.name || ''),
+              String(it.category || ''),
+              String(it.status || ''),
+              String(qty),
+              formatCurrency(cost),
+              formatCurrency(Math.round(qty * cost)),
+            ];
+          }),
+        ),
+      );
+
+      bodyHtml += section(
+        'Category Breakdown',
+        table(
+          ['Category', 'Value'],
+          categoryBreakdown.map((c) => [String(c.name), formatCurrency(c.value)]),
+        ),
+      );
+    }
+
+    const html = `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>${escapeHtml(titleByTab[activeTab] || 'Report')}</title>
+          <style>
+            :root {
+              color-scheme: light;
+              --text: #0b1220;
+              --muted: #475569;
+              --border: #dbe3f0;
+              --soft: #fbfdff;
+              --header: #f4f7fb;
+              --accent: #2563eb; /* professional blue */
+              --accent-soft: rgba(37, 99, 235, 0.08);
+            }
+            body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; color: var(--text); margin: 0; background: #ffffff; }
+            .page { padding: 30px; }
+            .header { position: relative; display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; border-bottom: 2px solid var(--border); padding-bottom: 16px; margin-bottom: 20px; }
+            .header::before { content: ""; position: absolute; left: 0; top: -10px; width: 72px; height: 4px; border-radius: 999px; background: var(--accent); }
+            .brand { font-weight: 900; font-size: 22px; letter-spacing: 0.2px; }
+            .title { font-weight: 700; font-size: 16px; margin-top: 8px; color: #1e293b; }
+            .meta { font-size: 13px; color: var(--muted); line-height: 1.6; text-align: right; }
+            .meta strong { color: #1e293b; font-weight: 700; }
+            .section { margin: 18px 0 22px; }
+            .section-title {
+              font-weight: 900;
+              font-size: 12px;
+              text-transform: uppercase;
+              letter-spacing: 0.08em;
+              color: #1e40af;
+              margin-bottom: 10px;
+              padding-left: 10px;
+              border-left: 3px solid var(--accent);
+            }
+            table { width: 100%; border-collapse: collapse; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+            th, td { border-bottom: 1px solid var(--border); padding: 10px 12px; font-size: 13px; vertical-align: top; }
+            th { background: var(--header); text-align: left; font-weight: 900; color: #0f172a; }
+            tbody tr:nth-child(even) td { background: var(--soft); }
+            tr:last-child td { border-bottom: none; }
+            .footer { margin-top: 18px; padding-top: 12px; border-top: 1px dashed var(--border); font-size: 12px; color: var(--muted); }
+            @media print {
+              .page { padding: 14mm; }
+              a { color: inherit; text-decoration: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="page">
+            <div class="header">
+              <div>
+                <div class="brand">${escapeHtml(clinicDisplayName)}</div>
+                <div class="title">${escapeHtml(titleByTab[activeTab] || 'Report')}</div>
+              </div>
+              <div class="meta">
+                <div><strong>Date Range:</strong> ${escapeHtml(safeStart)} to ${escapeHtml(safeEnd)}</div>
+                <div><strong>Generated:</strong> ${escapeHtml(generatedAt)}</div>
+              </div>
+            </div>
+
+            ${bodyHtml}
+
+            <div class="footer">Powered by Clinic Companion.</div>
+          </div>
+
+          <script>
+            window.addEventListener('load', () => {
+              // Give layout/fonts a moment to settle before printing.
+              setTimeout(() => {
+                try {
+                  window.focus();
+                  window.print();
+                } catch (e) {
+                  // ignore
+                }
+              }, 350);
+            });
+          </script>
+        </body>
+      </html>
+    `;
+
+    // More reliable than document.write(): open a Blob URL.
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, '_blank');
+
+    // If popups are blocked, fall back to same-tab navigation.
+    if (!w) {
+      window.location.assign(url);
+    }
+
+    // Revoke after a short delay (after the new tab has loaded).
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  };
+
   return (
     <div className="min-h-screen">
       <Header title="Reports" subtitle="View analytics and generate reports" />
       
       <div className="p-4 sm:p-6 animate-fade-in overflow-x-hidden">
-        <Tabs defaultValue="revenue" className="space-y-6">
+        <Tabs defaultValue="revenue" className="space-y-6" onValueChange={(v) => setActiveTab(v as any)}>
           <div className="flex flex-col gap-4">
             <div className="overflow-x-auto">
               <TabsList className="w-max min-w-full justify-start">
@@ -237,7 +579,7 @@ export default function Reports() {
                   />
                 </div>
               </div>
-              <Button variant="outline" className="w-full sm:w-auto">
+              <Button variant="outline" className="w-full sm:w-auto" onClick={handleExport}>
                 <Download className="h-4 w-4 mr-2" />
                 Export
               </Button>

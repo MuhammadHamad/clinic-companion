@@ -723,7 +723,12 @@ export default function Patients() {
                     <TableRow key={patient.id} className="data-table-row">
                       <TableCell className="font-medium text-primary">{patient.patient_number}</TableCell>
                       <TableCell>
-                        <div className="font-medium">{patient.first_name} {patient.last_name}</div>
+                        <button 
+                          onClick={() => openViewDialog(patient)}
+                          className="font-medium text-primary hover:underline text-left"
+                        >
+                          {patient.first_name} {patient.last_name}
+                        </button>
                         {patient.email && (
                           <div className="text-sm text-muted-foreground">{patient.email}</div>
                         )}
