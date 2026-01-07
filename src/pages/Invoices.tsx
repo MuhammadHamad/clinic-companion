@@ -304,14 +304,17 @@ export default function Invoices() {
 
     if (result.success) {
       setIsPaymentOpen(false);
+      setSelectedInvoice(null);
+      setPaymentData({ amount: 0, payment_method: '', reference_number: '', notes: '' });
       toast({
-        title: 'Payment Recorded',
-        description: `Rs. ${paymentData.amount.toLocaleString()} payment recorded successfully`,
+        title: 'Payment Updated',
+        description: 'Payment has been updated successfully',
       });
+      await loadInvoices();
     } else {
       toast({
         title: 'Error',
-        description: result.error,
+        description: result.error || 'Failed to update payment',
         variant: 'destructive',
       });
     }
@@ -783,7 +786,7 @@ export default function Invoices() {
                 {selectedInvoice.status !== 'paid' && (
                   <Button className="flex-1 h-11" onClick={() => { setIsViewOpen(false); openPaymentDialog(selectedInvoice); }}>
                     <CreditCard className="h-4 w-4 mr-2" />
-                    Record Payment
+                    Update Payment
                   </Button>
                 )}
               </div>
@@ -792,11 +795,11 @@ export default function Invoices() {
         </DialogContent>
       </Dialog>
 
-      {/* Record Payment Dialog */}
+      {/* Update Payment Dialog */}
       <Dialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Record Payment</DialogTitle>
+            <DialogTitle>Update Payment</DialogTitle>
             <DialogDescription>
               Invoice {selectedInvoice?.invoice_number} • Balance: Rs. {selectedInvoice?.balance.toLocaleString()}
             </DialogDescription>
@@ -853,7 +856,7 @@ export default function Invoices() {
               <Button type="button" variant="outline" onClick={() => setIsPaymentOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Record Payment</Button>
+              <Button type="submit">Update Payment</Button>
             </DialogFooter>
           </form>
         </DialogContent>

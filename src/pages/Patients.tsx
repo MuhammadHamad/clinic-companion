@@ -275,7 +275,40 @@ export default function Patients() {
   const openViewDialog = (patient: Patient) => {
     setSelectedPatient(patient);
     setIsViewOpen(true);
+
+    const params = new URLSearchParams(location.search);
+    params.set('viewPatientId', patient.id);
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: false });
   };
+
+  const closeViewDialog = () => {
+    setIsViewOpen(false);
+
+    const params = new URLSearchParams(location.search);
+    params.delete('viewPatientId');
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: false });
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const viewPatientId = params.get('viewPatientId');
+
+    if (!viewPatientId) {
+      if (isViewOpen) setIsViewOpen(false);
+      if (selectedPatient) setSelectedPatient(null);
+      return;
+    }
+
+    const patient = patients.find((p) => p.id === viewPatientId);
+    if (!patient) return;
+
+    if (!selectedPatient || selectedPatient.id !== patient.id) {
+      setSelectedPatient(patient);
+    }
+    if (!isViewOpen) {
+      setIsViewOpen(true);
+    }
+  }, [location.search, patients, isViewOpen, selectedPatient]);
 
   const loadPatientPayments = async (patientId: string) => {
     try {
@@ -378,14 +411,14 @@ export default function Patients() {
       setIsPaymentOpen(false);
       setSelectedInvoiceForPayment(null);
       toast({
-        title: 'Payment Recorded',
-        description: 'Payment has been recorded successfully',
+        title: 'Payment Updated',
+        description: 'Payment has been updated successfully',
       });
       await loadPatientPayments(selectedPatient.id);
     } else {
       toast({
         title: 'Error',
-        description: result.error || 'Failed to record payment',
+        description: result.error || 'Failed to update payment',
         variant: 'destructive',
       });
     }
@@ -1222,9 +1255,18 @@ export default function Patients() {
       </Dialog>
 
       {/* View Patient Dialog */}
-      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+      <Dialog
+        open={isViewOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeViewDialog();
+            return;
+          }
+          setIsViewOpen(true);
+        }}
+      >
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto pr-2">
-          <DialogHeader>
+          <DialogHeader className="pt-8 sm:pt-0">
             <DialogTitle>Patient Profile</DialogTitle>
           </DialogHeader>
           
@@ -1242,6 +1284,30 @@ export default function Patients() {
                   </Badge>
                 </div>
               </div>
+
+              {(selectedPatient.allergies || selectedPatient.medical_conditions || selectedPatient.current_medications) && (
+                <div className="p-4 bg-muted/50 rounded-lg space-y-2">
+                  <h4 className="font-medium text-sm">Medical Info</h4>
+                  {selectedPatient.allergies && (
+                    <div className="text-sm">
+                      <span className="text-destructive font-medium">Allergies: </span>
+                      {selectedPatient.allergies}
+                    </div>
+                  )}
+                  {selectedPatient.medical_conditions && (
+                    <div className="text-sm">
+                      <span className="font-medium">Conditions: </span>
+                      {selectedPatient.medical_conditions}
+                    </div>
+                  )}
+                  {selectedPatient.current_medications && (
+                    <div className="text-sm">
+                      <span className="font-medium">Current medications: </span>
+                      {selectedPatient.current_medications}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {(() => {
                 const patientInvoices = invoices.filter((inv) => inv.patient_id === selectedPatient.id);
@@ -1418,7 +1484,7 @@ export default function Patients() {
                                       disabled={inv.balance <= 0}
                                       onClick={() => openPaymentDialog(inv)}
                                     >
-                                      Record Payment
+                                      Update Payment
                                     </Button>
                                   </TableCell>
                                 </TableRow>
@@ -1482,36 +1548,18 @@ export default function Patients() {
                 );
               })()}
 
-              {(selectedPatient.allergies || selectedPatient.medical_conditions) && (
-                <div className="p-4 bg-muted/50 rounded-lg space-y-2">
-                  <h4 className="font-medium text-sm">Medical Info</h4>
-                  {selectedPatient.allergies && (
-                    <div className="text-sm">
-                      <span className="text-destructive font-medium">Allergies: </span>
-                      {selectedPatient.allergies}
-                    </div>
-                  )}
-                  {selectedPatient.medical_conditions && (
-                    <div className="text-sm">
-                      <span className="font-medium">Conditions: </span>
-                      {selectedPatient.medical_conditions}
-                    </div>
-                  )}
-                </div>
-              )}
-
               <DialogFooter>
                 <Button
                   variant="outline"
                   onClick={() => {
-                    setIsViewOpen(false);
+                    closeViewDialog();
                     navigate(`/invoices?patientId=${encodeURIComponent(selectedPatient.id)}`);
                   }}
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   New Invoice
                 </Button>
-                <Button variant="outline" onClick={() => setIsViewOpen(false)}>
+                <Button variant="outline" onClick={closeViewDialog}>
                   Close
                 </Button>
                 <Button
@@ -1521,7 +1569,7 @@ export default function Patients() {
                   View Statement
                 </Button>
                 <Button onClick={() => {
-                  setIsViewOpen(false);
+                  closeViewDialog();
                   openEditForm(selectedPatient);
                 }}>
                   <Pencil className="h-4 w-4 mr-2" />
@@ -1533,7 +1581,7 @@ export default function Patients() {
         </DialogContent>
       </Dialog>
 
-      {/* Record Payment Dialog (from patient profile) */}
+      {/* Update Payment Dialog (from patient profile) */}
       <Dialog
         open={isPaymentOpen}
         onOpenChange={(open) => {
@@ -1543,7 +1591,7 @@ export default function Patients() {
       >
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Record Payment</DialogTitle>
+            <DialogTitle>Update Payment</DialogTitle>
             <DialogDescription>
               {selectedInvoiceForPayment
                 ? `Invoice ${selectedInvoiceForPayment.invoice_number} (Balance: Rs. ${selectedInvoiceForPayment.balance.toLocaleString()})`

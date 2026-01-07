@@ -505,7 +505,14 @@ export default function Inventory() {
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
-            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+            <CardContent 
+              className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4 cursor-pointer hover:bg-muted/50 transition-colors"
+              onClick={() => {
+                setStatusFilter('all');
+                setCategoryFilter('all');
+                setSearchQuery('');
+              }}
+            >
               <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
                 <Package className="h-5 w-5 text-primary" />
               </div>
@@ -516,7 +523,10 @@ export default function Inventory() {
             </CardContent>
           </Card>
           <Card className={stats.low_stock > 0 ? 'border-warning/50' : ''}>
-            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+            <CardContent 
+              className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4 cursor-pointer hover:bg-muted/50 transition-colors"
+              onClick={() => setStatusFilter(statusFilter === 'low_stock' ? 'all' : 'low_stock')}
+            >
               <div className="h-10 w-10 rounded-lg bg-warning/10 flex items-center justify-center">
                 <AlertTriangle className="h-5 w-5 text-warning" />
               </div>
@@ -527,7 +537,10 @@ export default function Inventory() {
             </CardContent>
           </Card>
           <Card className={stats.out_of_stock > 0 ? 'border-destructive/50' : ''}>
-            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+            <CardContent 
+              className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4 cursor-pointer hover:bg-muted/50 transition-colors"
+              onClick={() => setStatusFilter(statusFilter === 'out_of_stock' ? 'all' : 'out_of_stock')}
+            >
               <div className="h-10 w-10 rounded-lg bg-destructive/10 flex items-center justify-center">
                 <AlertTriangle className="h-5 w-5 text-destructive" />
               </div>
@@ -538,7 +551,14 @@ export default function Inventory() {
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+            <CardContent 
+              className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4 cursor-pointer hover:bg-muted/50 transition-colors"
+              onClick={() => {
+                setStatusFilter('all');
+                setCategoryFilter('all');
+                setSearchQuery('');
+              }}
+            >
               <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center">
                 <Package className="h-5 w-5 text-success" />
               </div>
