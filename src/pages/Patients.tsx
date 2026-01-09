@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
 import { 
   Plus, 
@@ -60,14 +60,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { usePatients, useInvoices } from '@/hooks';
+import { usePatients, useInvoices, useTreatmentTypes } from '@/hooks';
 import { supabase } from '@/integrations/supabase/client';
-import { Invoice, Patient, Payment, PaymentMethod } from '@/types';
+import { Invoice, Patient, Payment, PaymentMethod, InvoiceItem } from '@/types';
 import { useToast } from '@/hooks';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
-import { patientSchema, type PatientFormData } from '@/lib/validation';
+import { patientSchema, invoiceSchema, type PatientFormData } from '@/lib/validation';
+import { InvoiceViewDialog } from '@/components/invoices/InvoiceViewDialog';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 const statusColors: Record<string, string> = {
   draft: 'bg-muted text-muted-foreground',
@@ -79,7 +81,8 @@ const statusColors: Record<string, string> = {
 
 export default function Patients() {
   const { patients, isLoading, createPatient, updatePatient, archivePatient, restorePatient } = usePatients();
-  const { invoices, recordPayment } = useInvoices();
+  const { invoices, recordPayment, updateInvoiceDiscount, createInvoice } = useInvoices();
+  const { treatmentTypes } = useTreatmentTypes();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
@@ -113,6 +116,19 @@ export default function Patients() {
 
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [duplicatePatientInfo, setDuplicatePatientInfo] = useState<Patient | null>(null);
+
+  const [isInvoiceViewOpen, setIsInvoiceViewOpen] = useState(false);
+  const [selectedInvoiceForView, setSelectedInvoiceForView] = useState<Invoice | null>(null);
+
+  const [isInvoiceCreateOpen, setIsInvoiceCreateOpen] = useState(false);
+  const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
+  const [invoiceFormData, setInvoiceFormData] = useState({
+    items: [{ description: '', tooth_number: '', quantity: 1, unit_price: 0, total: 0 }] as InvoiceItem[],
+    discount_amount: 0,
+    tax_amount: 0,
+    payment_terms: '',
+    notes: '',
+  });
 
   const [isStatementOpen, setIsStatementOpen] = useState(false);
   const [isRestoreOpen, setIsRestoreOpen] = useState(false);
@@ -385,6 +401,119 @@ export default function Patients() {
       notes: '',
     });
     setIsPaymentOpen(true);
+  };
+
+  const openInvoiceViewDialog = (invoice: Invoice) => {
+    setSelectedInvoiceForView(invoice);
+    setIsInvoiceViewOpen(true);
+  };
+
+  const openCreateInvoiceDialog = (patient: Patient) => {
+    setSelectedPatient(patient);
+    setInvoiceFormData({
+      items: [{ description: '', tooth_number: '', quantity: 1, unit_price: 0, total: 0 }] as InvoiceItem[],
+      discount_amount: 0,
+      tax_amount: 0,
+      payment_terms: '',
+      notes: '',
+    });
+    setIsInvoiceCreateOpen(true);
+  };
+
+  const addInvoiceItem = () => {
+    setInvoiceFormData((prev) => ({
+      ...prev,
+      items: [...prev.items, { description: '', tooth_number: '', quantity: 1, unit_price: 0, total: 0 }],
+    }));
+  };
+
+  const updateInvoiceItem = (index: number, field: keyof InvoiceItem, value: string | number) => {
+    setInvoiceFormData((prev) => {
+      const next = [...prev.items];
+      (next[index] as any)[field] = value;
+      if (field === 'quantity' || field === 'unit_price') {
+        const qty = Number(next[index].quantity || 0);
+        const price = Number(next[index].unit_price || 0);
+        next[index].total = qty * price;
+      }
+      return { ...prev, items: next };
+    });
+  };
+
+  const removeInvoiceItem = (index: number) => {
+    setInvoiceFormData((prev) => {
+      if (prev.items.length <= 1) return prev;
+      return { ...prev, items: prev.items.filter((_, i) => i !== index) };
+    });
+  };
+
+  const calculateInvoiceTotals = () => {
+    const subtotal = invoiceFormData.items.reduce((sum, item) => sum + Number(item.total || 0), 0);
+    const total = subtotal - Number(invoiceFormData.discount_amount || 0) + Number(invoiceFormData.tax_amount || 0);
+    return { subtotal, total };
+  };
+
+  const handleCreateInvoice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPatient) return;
+    if (isCreatingInvoice) return;
+
+    const payload = {
+      patient_id: selectedPatient.id,
+      items: invoiceFormData.items,
+      discount_amount: Number(invoiceFormData.discount_amount || 0),
+      tax_amount: Number(invoiceFormData.tax_amount || 0),
+      payment_terms: invoiceFormData.payment_terms,
+      notes: invoiceFormData.notes,
+    };
+
+    const validationResult = invoiceSchema.safeParse(payload);
+    if (!validationResult.success) {
+      const errorMessages = validationResult.error.errors.map((err) => err.message).join('. ');
+      toast({ title: 'Validation Error', description: errorMessages, variant: 'destructive' });
+      return;
+    }
+
+    setIsCreatingInvoice(true);
+    try {
+      const { total } = calculateInvoiceTotals();
+      const result = await createInvoice({
+        patient_id: selectedPatient.id,
+        items: invoiceFormData.items.filter((i) => i.description),
+        discount_amount: Number(invoiceFormData.discount_amount || 0),
+        tax_amount: Number(invoiceFormData.tax_amount || 0),
+        payment_terms: invoiceFormData.payment_terms,
+        notes: invoiceFormData.notes,
+      });
+
+      if (result.success) {
+        toast({ title: 'Invoice Created', description: `Invoice created for Rs. ${total.toLocaleString()}` });
+        setIsInvoiceCreateOpen(false);
+      } else {
+        toast({ title: 'Error', description: result.error || 'Failed to create invoice', variant: 'destructive' });
+      }
+    } finally {
+      setIsCreatingInvoice(false);
+    }
+  };
+
+  const handleInvoiceDiscountUpdate = async (invoice: Invoice, discountAmount: number) => {
+    const result = await updateInvoiceDiscount(invoice.id, discountAmount);
+    if (result.success) {
+      toast({
+        title: 'Invoice Updated',
+        description: 'Discount has been updated successfully',
+      });
+      setSelectedInvoiceForView((prev) =>
+        prev && prev.id === invoice.id ? { ...prev, discount_amount: discountAmount } : prev,
+      );
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error || 'Failed to update invoice',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handlePatientPayment = async (e: React.FormEvent) => {
@@ -1381,7 +1510,7 @@ export default function Patients() {
                         )}
                       >
                         <div className="text-xs uppercase tracking-wide text-muted-foreground">Outstanding Balance</div>
-                        <div className={cn('mt-1 text-2xl font-semibold', runningBalance > 0 ? 'text-destructive' : 'text-success')}>
+                        <div className={cn('mt-1 text-2xl font-semibold', runningBalance > 0 ? 'text-destructive' : 'text-slate-900')}>
                           Rs. {runningBalance.toLocaleString()}
                         </div>
                       </div>
@@ -1416,8 +1545,10 @@ export default function Patients() {
 
                     <div className="grid grid-cols-4 gap-3">
                       <div className="p-3 rounded-lg border bg-card">
-                        <div className="text-xs text-muted-foreground">Total Visits</div>
-                        <div className="text-lg font-semibold">{visitsCount}</div>
+                        <div className="text-xs text-muted-foreground">Total Cases</div>
+                        <div className="text-lg font-semibold">
+                          {invoicesWithVisitNumbers.length}
+                        </div>
                       </div>
                       <div className="p-3 rounded-lg border bg-card">
                         <div className="text-xs text-muted-foreground">Total Billed</div>
@@ -1436,114 +1567,216 @@ export default function Patients() {
                     {/* Visits (Invoices) */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <h4 className="font-medium">Visit History (Invoices)</h4>
+                        <h4 className="font-medium">Case History</h4>
                       </div>
-                      <div className="rounded-lg border overflow-hidden">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Visit #</TableHead>
-                              <TableHead>Date</TableHead>
-                              <TableHead>Invoice #</TableHead>
-                              <TableHead className="text-right">Total</TableHead>
-                              <TableHead className="text-right">Paid</TableHead>
-                              <TableHead className="text-right">Balance</TableHead>
-                              <TableHead>Status</TableHead>
-                              <TableHead className="text-right">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {patientInvoicesChronological.length === 0 ? (
-                              <TableRow>
-                                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                                  No visits yet (no invoices found)
-                                </TableCell>
-                              </TableRow>
-                            ) : (
-                              displayInvoices.map((inv) => (
-                                <TableRow key={inv.id}>
-                                  <TableCell className="font-medium text-primary">
-                                    Visit #{inv.visit_number}
-                                  </TableCell>
-                                  <TableCell>{inv.invoice_date}</TableCell>
-                                  <TableCell className="font-mono text-sm">{inv.invoice_number}</TableCell>
-                                  <TableCell className="text-right">Rs. {inv.total_amount.toLocaleString()}</TableCell>
-                                  <TableCell className="text-right">Rs. {inv.amount_paid.toLocaleString()}</TableCell>
-                                  <TableCell className={cn('text-right font-medium', inv.balance > 0 && 'text-destructive')}>
-                                    Rs. {inv.balance.toLocaleString()}
-                                  </TableCell>
-                                  <TableCell>
-                                    <Badge variant="outline" className={cn(statusColors[inv.status as any] || '')}>
-                                      {inv.status}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      disabled={inv.balance <= 0}
-                                      onClick={() => openPaymentDialog(inv)}
-                                    >
-                                      Update Payment
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              ))
-                            )}
-                          </TableBody>
-                        </Table>
-                      </div>
+                      {patientInvoicesChronological.length === 0 ? (
+                        <div className="rounded-lg border p-6 text-center text-muted-foreground">No cases yet (no invoices found)</div>
+                      ) : (
+                        (() => {
+                          const caseKeyForInvoice = (inv: Invoice) => {
+                            return `invoice:${inv.id}`;
+                          };
+
+                          const caseKeyToInvoices = new Map<string, typeof invoicesWithVisitNumbers>();
+                          for (const inv of invoicesWithVisitNumbers) {
+                            const k = caseKeyForInvoice(inv);
+                            const arr = caseKeyToInvoices.get(k) || [];
+                            arr.push(inv);
+                            caseKeyToInvoices.set(k, arr);
+                          }
+
+                          const caseKeysChronological = Array.from(caseKeyToInvoices.entries())
+                            .map(([key, invs]) => {
+                              const last = [...invs]
+                                .map((i) => i.invoice_date || i.created_at?.split('T')[0] || '')
+                                .filter(Boolean)
+                                .sort()
+                                .slice(-1)[0];
+                              return { key, last };
+                            })
+                            .sort((a, b) => a.last.localeCompare(b.last));
+
+                          const cases = caseKeysChronological.map(({ key }, idx) => {
+                            const invs = (caseKeyToInvoices.get(key) || []).slice().sort(compareInvoiceAsc);
+                            const billed = invs.reduce((sum, i) => sum + Number(i.total_amount || 0), 0);
+                            const paid = invs.reduce((sum, i) => sum + Number(i.amount_paid || 0), 0);
+                            const balance = invs.reduce((sum, i) => sum + Number(i.balance || 0), 0);
+                            const last = invs
+                              .map((i) => i.invoice_date || i.created_at?.split('T')[0])
+                              .filter(Boolean)
+                              .sort()
+                              .slice(-1)[0];
+                            const caseNumber = idx + 1;
+                            const caseIllness = (() => {
+                              const lastInvoice = invs[invs.length - 1];
+                              const names =
+                                lastInvoice?.items
+                                  ?.map((it) => (it.description || '').trim())
+                                  .filter(Boolean) || [];
+
+                              const seen = new Set<string>();
+                              const unique = names.filter((n) => {
+                                const key = n.toLowerCase();
+                                if (seen.has(key)) return false;
+                                seen.add(key);
+                                return true;
+                              });
+
+                              return unique.join(', ');
+                            })();
+                            const invoiceIds = new Set(invs.map((i) => i.id));
+                            const casePayments = patientPayments
+                              .filter((p) => invoiceIds.has(p.invoice_id))
+                              .slice()
+                              .sort((a, b) => {
+                                const da = a.payment_date || a.created_at || '';
+                                const db = b.payment_date || b.created_at || '';
+                                return db.localeCompare(da);
+                              });
+
+                            return {
+                              key,
+                              caseNumber,
+                              caseIllness,
+                              invoices: invs,
+                              totals: { billed, paid, balance },
+                              lastVisit: last,
+                              payments: casePayments,
+                            };
+                          });
+
+                          return (
+                            <div className="rounded-lg border overflow-hidden">
+                              <Accordion type="multiple" className="w-full">
+                                {cases
+                                  .slice()
+                                  .reverse()
+                                  .map((c) => (
+                                    <AccordionItem key={c.key} value={c.key} className="px-4">
+                                      <AccordionTrigger className="hover:no-underline">
+                                        <div className="flex w-full items-center justify-between gap-4">
+                                          <div className="text-left">
+                                            <div className="font-semibold">
+                                              {(c.caseIllness || '').trim() ? `${c.caseIllness} — ` : ''}Case #{c.caseNumber}
+                                            </div>
+                                            <div className="text-xs text-muted-foreground">Last visit: {c.lastVisit || '-'}</div>
+                                          </div>
+                                          <div className="grid grid-cols-3 gap-3 text-right">
+                                            <div>
+                                              <div className="text-[11px] text-muted-foreground">Billed</div>
+                                              <div className="text-sm font-semibold">Rs. {c.totals.billed.toLocaleString()}</div>
+                                            </div>
+                                            <div>
+                                              <div className="text-[11px] text-muted-foreground">Paid</div>
+                                              <div className="text-sm font-semibold text-success">Rs. {c.totals.paid.toLocaleString()}</div>
+                                            </div>
+                                            <div>
+                                              <div className="text-[11px] text-muted-foreground">Balance</div>
+                                              <div
+                                                className={cn(
+                                                  'text-sm font-semibold',
+                                                  c.totals.balance > 0 ? 'text-destructive' : 'text-success'
+                                                )}
+                                              >
+                                                Rs. {c.totals.balance.toLocaleString()}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </AccordionTrigger>
+                                      <AccordionContent className="pt-4">
+                                        <div className="space-y-4">
+                                          <div className="rounded-lg border overflow-hidden">
+                                            <Table>
+                                              <TableHeader>
+                                                <TableRow>
+                                                  <TableHead>Date</TableHead>
+                                                  <TableHead>Invoice #</TableHead>
+                                                  <TableHead className="text-right">Total</TableHead>
+                                                  <TableHead className="text-right">Paid</TableHead>
+                                                  <TableHead className="text-right">Balance</TableHead>
+                                                  <TableHead>Status</TableHead>
+                                                </TableRow>
+                                              </TableHeader>
+                                              <TableBody>
+                                                {c.invoices
+                                                  .slice()
+                                                  .reverse()
+                                                  .map((inv) => (
+                                                    <TableRow key={inv.id}>
+                                                      <TableCell>{inv.invoice_date}</TableCell>
+                                                      <TableCell className="font-mono text-sm">
+                                                        <Button
+                                                          type="button"
+                                                          variant="link"
+                                                          className="h-auto p-0 font-mono text-sm"
+                                                          onClick={() => openInvoiceViewDialog(inv)}
+                                                        >
+                                                          {inv.invoice_number}
+                                                        </Button>
+                                                      </TableCell>
+                                                      <TableCell className="text-right">Rs. {inv.total_amount.toLocaleString()}</TableCell>
+                                                      <TableCell className="text-right">Rs. {inv.amount_paid.toLocaleString()}</TableCell>
+                                                      <TableCell className={cn('text-right font-medium', inv.balance > 0 && 'text-destructive')}>
+                                                        Rs. {inv.balance.toLocaleString()}
+                                                      </TableCell>
+                                                      <TableCell>
+                                                        <Badge variant="outline" className={cn(statusColors[inv.status as any] || '')}>
+                                                          {inv.status}
+                                                        </Badge>
+                                                      </TableCell>
+                                                    </TableRow>
+                                                  ))}
+                                              </TableBody>
+                                            </Table>
+                                          </div>
+
+                                          <div className="rounded-lg border p-4">
+                                            <div className="flex items-center justify-between">
+                                              <div className="font-medium">Payments</div>
+                                              <div className="text-xs text-muted-foreground">
+                                                {c.payments.length} payment{c.payments.length === 1 ? '' : 's'}
+                                              </div>
+                                            </div>
+
+                                            {c.payments.length === 0 ? (
+                                              <div className="mt-3 text-sm text-muted-foreground">No payments recorded for this case.</div>
+                                            ) : (
+                                              <div className="mt-3 space-y-2">
+                                                {c.payments.map((p) => {
+                                                  const invNum = invoices.find((inv) => inv.id === p.invoice_id)?.invoice_number;
+                                                  return (
+                                                    <div key={p.id} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                                                      <div className="min-w-0">
+                                                        <div className="text-sm font-medium truncate">
+                                                          {p.payment_date}
+                                                          {invNum ? ` • ${invNum}` : ''}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground capitalize">
+                                                          {p.payment_method.replace('_', ' ')}
+                                                          {p.reference_number ? ` • Ref: ${p.reference_number}` : ''}
+                                                        </div>
+                                                      </div>
+                                                      <div className="text-sm font-semibold text-success whitespace-nowrap">Rs. {p.amount.toLocaleString()}</div>
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </AccordionContent>
+                                    </AccordionItem>
+                                  ))}
+                              </Accordion>
+                            </div>
+                          );
+                        })()
+                      )}
                     </div>
 
                     {/* Payments */}
-                    <div className="space-y-2">
-                      <h4 className="font-medium">Payment History</h4>
-                      <div className="rounded-lg border overflow-hidden">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Visit #</TableHead>
-                              <TableHead>Date</TableHead>
-                              <TableHead>Method</TableHead>
-                              <TableHead>Invoice</TableHead>
-                              <TableHead className="text-right">Amount</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {isLoadingPayments ? (
-                              <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                                  Loading payments...
-                                </TableCell>
-                              </TableRow>
-                            ) : patientPayments.length === 0 ? (
-                              <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                                  No payments found
-                                </TableCell>
-                              </TableRow>
-                            ) : (
-                              sortedPayments.map((p) => {
-                                const visitNumber = invoiceToVisitMap.get(p.invoice_id);
-                                return (
-                                  <TableRow key={p.id}>
-                                    <TableCell className="font-medium text-primary">
-                                      {visitNumber ? `Visit #${visitNumber}` : '-'}
-                                    </TableCell>
-                                    <TableCell>{p.payment_date}</TableCell>
-                                    <TableCell className="capitalize">{p.payment_method.replace('_', ' ')}</TableCell>
-                                    <TableCell className="font-mono text-sm">
-                                      {invoices.find((inv) => inv.id === p.invoice_id)?.invoice_number || '-'}
-                                    </TableCell>
-                                    <TableCell className="text-right font-medium">Rs. {p.amount.toLocaleString()}</TableCell>
-                                  </TableRow>
-                                );
-                              })
-                            )}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
+                    {null}
                   </>
                 );
               })()}
@@ -1552,8 +1785,7 @@ export default function Patients() {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    closeViewDialog();
-                    navigate(`/invoices?patientId=${encodeURIComponent(selectedPatient.id)}`);
+                    openCreateInvoiceDialog(selectedPatient);
                   }}
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -1578,6 +1810,163 @@ export default function Patients() {
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <InvoiceViewDialog
+        open={isInvoiceViewOpen}
+        onOpenChange={(open) => {
+          setIsInvoiceViewOpen(open);
+          if (!open) setSelectedInvoiceForView(null);
+        }}
+        invoice={selectedInvoiceForView}
+        onUpdatePayment={(inv) => {
+          setIsInvoiceViewOpen(false);
+          setSelectedInvoiceForView(null);
+          openPaymentDialog(inv);
+        }}
+        onUpdateDiscount={handleInvoiceDiscountUpdate}
+      />
+
+      <Dialog
+        open={isInvoiceCreateOpen}
+        onOpenChange={(open) => {
+          setIsInvoiceCreateOpen(open);
+          if (!open) setIsCreatingInvoice(false);
+        }}
+      >
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create Invoice</DialogTitle>
+            <DialogDescription>
+              {selectedPatient ? `Patient: ${selectedPatient.first_name} ${selectedPatient.last_name}` : 'Create a new invoice'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleCreateInvoice} className="space-y-6">
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <label className="form-label mb-0">Items</label>
+                <Button type="button" variant="outline" size="sm" onClick={addInvoiceItem}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Item
+                </Button>
+              </div>
+
+              {invoiceFormData.items.map((item, index) => (
+                <div key={index} className="grid grid-cols-12 gap-2 items-end">
+                  <div className="col-span-4">
+                    <Select
+                      value={item.description}
+                      onValueChange={(v) => {
+                        const treatment = treatmentTypes.find((t) => t.name === v);
+                        updateInvoiceItem(index, 'description', v);
+                        if (treatment) updateInvoiceItem(index, 'unit_price', treatment.default_price);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select treatment" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {treatmentTypes.map((type) => (
+                          <SelectItem key={type.id} value={type.name}>
+                            {type.name} - Rs. {type.default_price.toLocaleString()}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2">
+                    <Input
+                      placeholder="Tooth #"
+                      value={item.tooth_number || ''}
+                      onChange={(e) => updateInvoiceItem(index, 'tooth_number', e.target.value)}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Input
+                      type="number"
+                      min="1"
+                      value={item.quantity}
+                      onChange={(e) => updateInvoiceItem(index, 'quantity', parseInt(e.target.value) || 1)}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      value={item.unit_price}
+                      onChange={(e) => updateInvoiceItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="col-span-1 text-right font-medium py-2">
+                    Rs. {Number(item.total || 0).toLocaleString()}
+                  </div>
+                  <div className="col-span-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeInvoiceItem(index)}
+                      disabled={invoiceFormData.items.length === 1}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-border pt-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Subtotal</span>
+                <span className="font-medium">Rs. {calculateInvoiceTotals().subtotal.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span>Discount</span>
+                <Input
+                  type="number"
+                  min="0"
+                  value={invoiceFormData.discount_amount}
+                  onChange={(e) => setInvoiceFormData({ ...invoiceFormData, discount_amount: parseFloat(e.target.value) || 0 })}
+                  className="w-32 text-right"
+                />
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span>Tax</span>
+                <Input
+                  type="number"
+                  min="0"
+                  value={invoiceFormData.tax_amount}
+                  onChange={(e) => setInvoiceFormData({ ...invoiceFormData, tax_amount: parseFloat(e.target.value) || 0 })}
+                  className="w-32 text-right"
+                />
+              </div>
+              <div className="flex justify-between text-lg font-bold pt-2 border-t border-border">
+                <span>Total</span>
+                <span>Rs. {calculateInvoiceTotals().total.toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="form-label">Notes</label>
+              <Textarea
+                value={invoiceFormData.notes}
+                onChange={(e) => setInvoiceFormData({ ...invoiceFormData, notes: e.target.value })}
+                placeholder="Additional notes"
+                rows={2}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsInvoiceCreateOpen(false)} disabled={isCreatingInvoice}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isCreatingInvoice || !selectedPatient}>
+                Create Invoice
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
