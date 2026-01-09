@@ -210,6 +210,49 @@ export function useInvoices() {
     }
   };
 
+  const updateInvoiceDiscount = async (invoiceId: string, discountAmount: number) => {
+    try {
+      const invoice = invoices.find((i) => i.id === invoiceId);
+      if (!invoice) throw new Error('Invoice not found');
+
+      const safeDiscount = Math.max(0, Number.isFinite(discountAmount) ? discountAmount : 0);
+      const total_amount = invoice.subtotal - safeDiscount + (invoice.tax_amount || 0);
+      const balance = Math.max(0, total_amount - (invoice.amount_paid || 0));
+      const status: InvoiceStatus = balance <= 0 ? 'paid' : invoice.amount_paid > 0 ? 'partial' : 'unpaid';
+
+      const { error } = await supabase
+        .from('invoices')
+        .update({
+          discount_amount: safeDiscount,
+          total_amount,
+          balance,
+          status,
+        })
+        .eq('id', invoiceId);
+
+      if (error) throw error;
+
+      setInvoices((prev) =>
+        prev.map((inv) =>
+          inv.id === invoiceId
+            ? {
+                ...inv,
+                discount_amount: safeDiscount,
+                total_amount,
+                balance,
+                status,
+              }
+            : inv,
+        ),
+      );
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error updating invoice discount:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
   const deleteInvoice = async (id: string) => {
     try {
       const { error } = await supabase
@@ -242,6 +285,7 @@ export function useInvoices() {
     fetchInvoices,
     createInvoice,
     recordPayment,
+    updateInvoiceDiscount,
     deleteInvoice,
   };
 }

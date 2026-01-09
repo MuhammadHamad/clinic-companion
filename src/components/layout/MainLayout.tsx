@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useNavigate } from 'react-router-dom';
-import { Sidebar } from './Sidebar';
+import { Sidebar } from '@/components/layout/Sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserRole } from '@/hooks';
 

@@ -51,6 +51,7 @@ import { Invoice, InvoiceItem, InvoiceStatus, PaymentMethod } from '@/types';
 import { useToast } from '@/hooks';
 import { cn } from '@/lib/utils';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { InvoiceViewDialog } from '@/components/invoices/InvoiceViewDialog';
 
 const statusColors: Record<InvoiceStatus, string> = {
   draft: 'bg-muted text-muted-foreground',
@@ -61,7 +62,7 @@ const statusColors: Record<InvoiceStatus, string> = {
 };
 
 export default function Invoices() {
-  const { invoices, isLoading, fetchInvoices, createInvoice, recordPayment, deleteInvoice } = useInvoices();
+  const { invoices, isLoading, fetchInvoices, createInvoice, recordPayment, updateInvoiceDiscount, deleteInvoice } = useInvoices();
   const { patients } = usePatients();
   const { treatmentTypes } = useTreatmentTypes();
   const location = useLocation();
@@ -179,6 +180,23 @@ export default function Invoices() {
     setIsPaymentOpen(true);
   };
 
+  const handleUpdateDiscount = async (invoice: Invoice, discountAmount: number) => {
+    const result = await updateInvoiceDiscount(invoice.id, discountAmount);
+    if (result.success) {
+      toast({
+        title: 'Invoice Updated',
+        description: 'Discount has been updated successfully',
+      });
+      setSelectedInvoice((prev) => (prev && prev.id === invoice.id ? { ...prev, discount_amount: discountAmount } : prev));
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error || 'Failed to update invoice',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const addItem = () => {
     setFormData({
       ...formData,
@@ -282,6 +300,8 @@ export default function Invoices() {
 
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!selectedInvoice) return;
     
     // Validate payment data with Zod
     const validationResult = paymentSchema.safeParse(paymentData);
@@ -305,12 +325,12 @@ export default function Invoices() {
     if (result.success) {
       setIsPaymentOpen(false);
       setSelectedInvoice(null);
-      setPaymentData({ amount: 0, payment_method: '', reference_number: '', notes: '' });
+      setPaymentData({ amount: 0, payment_method: undefined, reference_number: '', notes: '' });
       toast({
         title: 'Payment Updated',
         description: 'Payment has been updated successfully',
       });
-      await loadInvoices();
+      await fetchInvoices();
     } else {
       toast({
         title: 'Error',
@@ -689,111 +709,16 @@ export default function Invoices() {
         </DialogContent>
       </Dialog>
 
-      {/* View Invoice Dialog */}
-      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="pb-6 border-b border-border">
-            <DialogTitle className="text-2xl font-bold text-foreground">
-              Invoice {selectedInvoice?.invoice_number}
-            </DialogTitle>
-          </DialogHeader>
-          
-          {selectedInvoice && (
-            <div className="space-y-8 py-6">
-              {/* Invoice Header */}
-              <div className="grid grid-cols-2 gap-8">
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Patient</p>
-                  <p className="text-lg font-medium text-foreground">
-                    {selectedInvoice.patient?.first_name} {selectedInvoice.patient?.last_name}
-                  </p>
-                </div>
-                <div className="text-right space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Date</p>
-                  <p className="text-lg font-medium text-foreground">{selectedInvoice.invoice_date}</p>
-                </div>
-              </div>
-
-              {/* Items Table */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Services & Items</h3>
-                <div className="rounded-lg border border-border overflow-hidden">
-                  <Table>
-                    <TableHeader className="bg-muted/30">
-                      <TableRow>
-                        <TableHead className="font-semibold text-foreground">Description</TableHead>
-                        <TableHead className="font-semibold text-foreground">Tooth</TableHead>
-                        <TableHead className="text-right font-semibold text-foreground">Qty</TableHead>
-                        <TableHead className="text-right font-semibold text-foreground">Price</TableHead>
-                        <TableHead className="text-right font-semibold text-foreground">Total</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedInvoice.items?.map((item, index) => (
-                        <TableRow key={index} className="hover:bg-muted/20 transition-colors">
-                          <TableCell className="font-medium text-foreground">{item.description}</TableCell>
-                          <TableCell className="text-muted-foreground">{item.tooth_number || '-'}</TableCell>
-                          <TableCell className="text-right text-foreground">{item.quantity}</TableCell>
-                          <TableCell className="text-right text-foreground">Rs. {item.unit_price.toLocaleString()}</TableCell>
-                          <TableCell className="text-right font-medium text-foreground">Rs. {item.total.toLocaleString()}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-
-              {/* Totals Section */}
-              <div className="grid grid-cols-2 gap-8">
-                <div></div>
-                <div className="space-y-1">
-                  <div className="flex justify-between py-2 border-b border-border/50">
-                    <span className="text-sm text-muted-foreground">Subtotal</span>
-                    <span className="text-sm font-medium text-foreground">Rs. {selectedInvoice.subtotal.toLocaleString()}</span>
-                  </div>
-                  {selectedInvoice.discount_amount > 0 && (
-                    <div className="flex justify-between py-2 border-b border-border/50">
-                      <span className="text-sm text-muted-foreground">Discount</span>
-                      <span className="text-sm font-medium text-success">-Rs. {selectedInvoice.discount_amount.toLocaleString()}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between py-3 border-t border-border">
-                    <span className="text-base font-semibold text-foreground">Total</span>
-                    <span className="text-base font-bold text-foreground">Rs. {selectedInvoice.total_amount.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between py-2">
-                    <span className="text-sm text-muted-foreground">Paid</span>
-                    <span className="text-sm font-medium text-success">Rs. {selectedInvoice.amount_paid.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between py-3 border-t border-border">
-                    <span className="text-lg font-bold text-foreground">Balance Due</span>
-                    <span className={cn(
-                      "text-lg font-bold",
-                      selectedInvoice.balance > 0 ? "text-destructive" : "text-success"
-                    )}>
-                      Rs. {selectedInvoice.balance.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-3 pt-4 border-t border-border">
-                <Button variant="outline" className="flex-1 h-11">
-                  <Printer className="h-4 w-4 mr-2" />
-                  Print
-                </Button>
-                {selectedInvoice.status !== 'paid' && (
-                  <Button className="flex-1 h-11" onClick={() => { setIsViewOpen(false); openPaymentDialog(selectedInvoice); }}>
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    Update Payment
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <InvoiceViewDialog
+        open={isViewOpen}
+        onOpenChange={setIsViewOpen}
+        invoice={selectedInvoice}
+        onUpdatePayment={(inv) => {
+          setIsViewOpen(false);
+          openPaymentDialog(inv);
+        }}
+        onUpdateDiscount={handleUpdateDiscount}
+      />
 
       {/* Update Payment Dialog */}
       <Dialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen}>

@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { InventoryItem, InventoryCategory, InventoryStatus, MovementType } from '@/types';
+import { InventoryItem, InventoryCategory, InventoryStatus, MovementType, StockMovement } from '@/types';
 import { useToast } from '@/hooks';
 
 export function useInventory() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
+  const [movements, setMovements] = useState<StockMovement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
@@ -158,6 +159,41 @@ export function useInventory() {
     }
   }, [toast]);
 
+  const mapRowToMovement = (m: any): StockMovement => ({
+    id: m.id,
+    inventory_item_id: m.inventory_item_id,
+    movement_type: m.movement_type as MovementType,
+    quantity: Number(m.quantity),
+    previous_quantity: Number(m.previous_quantity),
+    new_quantity: Number(m.new_quantity),
+    unit_cost: m.unit_cost != null ? Number(m.unit_cost) : undefined,
+    notes: m.notes ?? undefined,
+    movement_date: m.movement_date || m.created_at?.split('T')[0] || '',
+    created_at: m.created_at,
+    created_by: m.created_by ?? undefined,
+    item: m.item ? mapRowToItem(m.item) : undefined,
+  });
+
+  const fetchMovements = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('stock_movements')
+        .select(`
+          *,
+          item:inventory_items(
+            *,
+            category:inventory_categories(*)
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setMovements((data || []).map(mapRowToMovement));
+    } catch (error: any) {
+      console.error('Error fetching stock movements:', error);
+    }
+  }, []);
+
   const createItem = async (itemData: Omit<InventoryItem, 'id' | 'status' | 'created_at' | 'category' | 'item_code'>) => {
     try {
       const isLikelyAutoCode = (code?: string | null) => (code || '').trim().toUpperCase().startsWith('ITM-');
@@ -272,7 +308,7 @@ export function useInventory() {
       const { data: sessionData } = await supabase.auth.getSession();
 
       // Record movement
-      const { error: movementError } = await supabase
+      const { data: insertedMovement, error: movementError } = await supabase
         .from('stock_movements')
         .insert({
           inventory_item_id: itemId,
@@ -283,7 +319,15 @@ export function useInventory() {
           unit_cost: movementData.unit_cost || null,
           notes: movementData.notes || null,
           created_by: sessionData.session?.user?.id,
-        });
+        })
+        .select(`
+          *,
+          item:inventory_items(
+            *,
+            category:inventory_categories(*)
+          )
+        `)
+        .single();
 
       if (movementError) throw movementError;
 
@@ -303,6 +347,10 @@ export function useInventory() {
 
       if (updateError) throw updateError;
       setItems((prev) => prev.map((it) => (it.id === itemId ? mapRowToItem(updatedItem) : it)));
+
+      if (insertedMovement) {
+        setMovements((prev) => [mapRowToMovement(insertedMovement), ...prev]);
+      }
       return { success: true };
     } catch (error: any) {
       console.error('Error recording movement:', error);
@@ -476,14 +524,17 @@ export function useInventory() {
   useEffect(() => {
     fetchItems();
     fetchCategories();
-  }, [fetchItems, fetchCategories]);
+    fetchMovements();
+  }, [fetchItems, fetchCategories, fetchMovements]);
 
   return {
     items,
     categories,
+    movements,
     isLoading,
     fetchItems,
     fetchCategories,
+    fetchMovements,
     createItem,
     updateItem,
     recordMovement,

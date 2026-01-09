@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,6 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Table,
   TableBody,
@@ -52,12 +55,26 @@ import {
   RefreshCw,
   Trash2,
   Settings,
+  BookOpen,
+  FileDown,
+  TrendingDown,
+  TrendingUp,
+  MessageSquareText,
+  CalendarDays,
+  Share2,
+  Printer,
+  Wallet,
+  AlertOctagon,
+  Hourglass,
+  ShoppingCart,
 } from 'lucide-react';
 import { useInventory } from '@/hooks';
-import { InventoryItem, InventoryCategory, InventoryStatus, MovementType } from '@/types';
+import { InventoryItem, InventoryCategory, InventoryStatus, MovementType, StockMovement } from '@/types';
 import { useToast } from '@/hooks';
 import { cn } from '@/lib/utils';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 const statusColors: Record<InventoryStatus, string> = {
   in_stock: 'bg-success/10 text-success border-success/20',
@@ -72,8 +89,22 @@ const statusLabels: Record<InventoryStatus, string> = {
 };
 
 export default function Inventory() {
-  const { items, categories, isLoading, fetchItems, createItem, updateItem, recordMovement, deleteItem, createCategory, updateCategory, deleteCategory } = useInventory();
+  const {
+    items,
+    categories,
+    movements,
+    isLoading,
+    fetchItems,
+    createItem,
+    updateItem,
+    recordMovement,
+    deleteItem,
+    createCategory,
+    updateCategory,
+    deleteCategory,
+  } = useInventory();
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -98,6 +129,93 @@ export default function Inventory() {
 
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [duplicateItemInfo, setDuplicateItemInfo] = useState<InventoryItem | null>(null);
+
+  const [isSupplierLedgerOpen, setIsSupplierLedgerOpen] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('sl') === '1';
+  });
+  const [supplierLedgerKey, setSupplierLedgerKey] = useState<string>(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('slSupplier') || '';
+  });
+  const [supplierLedgerTab, setSupplierLedgerTab] = useState<'overview' | 'items' | 'movements'>(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('slTab');
+    return tab === 'items' || tab === 'movements' || tab === 'overview' ? tab : 'overview';
+  });
+  const [supplierLedgerMovementRange, setSupplierLedgerMovementRange] = useState<'7d' | '30d' | '90d' | 'all' | 'custom'>(() => {
+    const params = new URLSearchParams(location.search);
+    const range = params.get('slRange');
+    return range === '7d' || range === '30d' || range === '90d' || range === 'all' || range === 'custom' ? range : '30d';
+  });
+  const [supplierLedgerFromDate, setSupplierLedgerFromDate] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('slFrom') || '';
+  });
+  const [supplierLedgerToDate, setSupplierLedgerToDate] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('slTo') || '';
+  });
+  const [isSupplierLedgerPdfBusy, setIsSupplierLedgerPdfBusy] = useState(false);
+
+  useEffect(() => {
+    // If something external changes the URL (back/forward), reflect it in state.
+    const params = new URLSearchParams(location.search);
+    const shouldOpen = params.get('sl') === '1';
+    const key = params.get('slSupplier') || '';
+    const tabParam = params.get('slTab');
+    const tab = tabParam === 'items' || tabParam === 'movements' || tabParam === 'overview' ? tabParam : 'overview';
+    const rangeParam = params.get('slRange');
+    const range = rangeParam === '7d' || rangeParam === '30d' || rangeParam === '90d' || rangeParam === 'all' || rangeParam === 'custom' ? rangeParam : '30d';
+    const from = params.get('slFrom') || '';
+    const to = params.get('slTo') || '';
+
+    if (shouldOpen !== isSupplierLedgerOpen) setIsSupplierLedgerOpen(shouldOpen);
+    if (key !== supplierLedgerKey) setSupplierLedgerKey(key);
+    if (tab !== supplierLedgerTab) setSupplierLedgerTab(tab);
+    if (range !== supplierLedgerMovementRange) setSupplierLedgerMovementRange(range);
+    if (from !== supplierLedgerFromDate) setSupplierLedgerFromDate(from);
+    if (to !== supplierLedgerToDate) setSupplierLedgerToDate(to);
+  }, [location.search]);
+
+  useEffect(() => {
+    // Build a stable query string so we don't cause infinite replace() loops
+    const existing = new URLSearchParams(location.search);
+    const kept: Array<[string, string]> = [];
+    existing.forEach((value, key) => {
+      if (key === 'sl' || key === 'slSupplier' || key === 'slTab' || key === 'slRange' || key === 'slFrom' || key === 'slTo') return;
+      kept.push([key, value]);
+    });
+    kept.sort((a, b) => (a[0] === b[0] ? a[1].localeCompare(b[1]) : a[0].localeCompare(b[0])));
+
+    const params = new URLSearchParams();
+    for (const [k, v] of kept) params.append(k, v);
+
+    if (isSupplierLedgerOpen) {
+      params.set('sl', '1');
+      if (supplierLedgerKey) params.set('slSupplier', supplierLedgerKey);
+      params.set('slTab', supplierLedgerTab);
+      params.set('slRange', supplierLedgerMovementRange);
+      if (supplierLedgerFromDate) params.set('slFrom', supplierLedgerFromDate);
+      if (supplierLedgerToDate) params.set('slTo', supplierLedgerToDate);
+    }
+
+    const nextSearch = params.toString();
+    const currentSearch = location.search.startsWith('?') ? location.search.slice(1) : location.search;
+    if (nextSearch !== currentSearch) {
+      navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : '' }, { replace: true });
+    }
+  }, [
+    isSupplierLedgerOpen,
+    supplierLedgerKey,
+    supplierLedgerTab,
+    supplierLedgerMovementRange,
+    supplierLedgerFromDate,
+    supplierLedgerToDate,
+    location.pathname,
+    location.search,
+    navigate,
+  ]);
 
   // Category management state
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
@@ -145,6 +263,508 @@ export default function Inventory() {
     
     return matchesSearch && matchesCategory && matchesStatus;
   });
+
+  const suppliers = useMemo(() => {
+    const normalize = (v?: string | null) => (v || '').trim();
+    const map = new Map<string, { key: string; name: string; contact: string; items: InventoryItem[] }>();
+
+    for (const item of items) {
+      const name = normalize(item.supplier_name);
+      const contact = normalize(item.supplier_contact);
+      if (!name && !contact) continue;
+      const key = `${name.toLowerCase()}|${contact.toLowerCase()}`;
+
+      const existing = map.get(key);
+      if (existing) {
+        existing.items.push(item);
+      } else {
+        map.set(key, { key, name, contact, items: [item] });
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      const nameCmp = a.name.localeCompare(b.name);
+      if (nameCmp !== 0) return nameCmp;
+      return a.contact.localeCompare(b.contact);
+    });
+  }, [items]);
+
+  const selectedSupplier = useMemo(() => {
+    if (!supplierLedgerKey) return null;
+    return suppliers.find((s) => s.key === supplierLedgerKey) || null;
+  }, [supplierLedgerKey, suppliers]);
+
+  const supplierMovements = useMemo(() => {
+    if (!selectedSupplier) return [] as StockMovement[];
+
+    const normalize = (v?: string | null) => (v || '').trim().toLowerCase();
+    const name = normalize(selectedSupplier.name);
+    const contact = normalize(selectedSupplier.contact);
+
+    return (movements || [])
+      .filter((m) => {
+        const item = m.item;
+        if (!item) return false;
+        const inName = normalize(item.supplier_name);
+        const inContact = normalize(item.supplier_contact);
+        return inName === name && inContact === contact;
+      })
+      .slice()
+      .sort((a, b) => {
+        const da = a.movement_date || a.created_at || '';
+        const db = b.movement_date || b.created_at || '';
+        return db.localeCompare(da);
+      });
+  }, [movements, selectedSupplier]);
+
+  const supplierLedgerStats = useMemo(() => {
+    if (!selectedSupplier) return null;
+
+    const currentStockValue = selectedSupplier.items.reduce(
+      (sum, it) => sum + Number(it.current_quantity || 0) * Number(it.unit_cost || 0),
+      0,
+    );
+
+    const totalStockInValue = supplierMovements
+      .filter((m) => m.movement_type === 'stock_in')
+      .reduce((sum, m) => sum + Number(m.quantity || 0) * Number(m.unit_cost || 0), 0);
+
+    const lastMovementDate = supplierMovements
+      .map((m) => m.movement_date || m.created_at?.split('T')[0])
+      .filter(Boolean)
+      .sort()
+      .slice(-1)[0];
+
+    return {
+      itemsCount: selectedSupplier.items.length,
+      currentStockValue,
+      totalStockInValue,
+      lastMovementDate: lastMovementDate || null,
+      movementsCount: supplierMovements.length,
+    };
+  }, [selectedSupplier, supplierMovements]);
+
+  const filteredSupplierMovements = useMemo(() => {
+    if (!selectedSupplier) return [] as StockMovement[];
+
+    const toDateString = (d: Date) => {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    const today = new Date();
+    const end = supplierLedgerToDate ? new Date(supplierLedgerToDate) : today;
+    const endStr = !Number.isNaN(end.getTime()) ? toDateString(end) : '';
+
+    let startStr: string | null = null;
+    if (supplierLedgerMovementRange === 'custom') {
+      startStr = supplierLedgerFromDate || null;
+    } else if (supplierLedgerMovementRange !== 'all') {
+      const days = supplierLedgerMovementRange === '7d' ? 7 : supplierLedgerMovementRange === '30d' ? 30 : 90;
+      const start = new Date();
+      start.setDate(start.getDate() - (days - 1));
+      startStr = toDateString(start);
+    }
+
+    return supplierMovements.filter((m) => {
+      const d = (m.movement_date || m.created_at?.split('T')[0] || '').slice(0, 10);
+      if (!d) return false;
+      if (startStr && d < startStr) return false;
+      if (endStr && d > endStr) return false;
+      return true;
+    });
+  }, [selectedSupplier, supplierMovements, supplierLedgerFromDate, supplierLedgerMovementRange, supplierLedgerToDate]);
+
+  const supplierLedgerInsights = useMemo(() => {
+    if (!selectedSupplier) return null;
+
+    const totalCurrentQty = selectedSupplier.items.reduce((sum, it) => sum + Number(it.current_quantity || 0), 0);
+    const lowStockItems = selectedSupplier.items.filter((it) => it.status === 'low_stock' || it.status === 'out_of_stock');
+
+    const stockInMovements = supplierMovements.filter((m) => m.movement_type === 'stock_in');
+    const lastPurchase = stockInMovements[0] || null;
+
+    const daysWindow = 30;
+    const start = new Date();
+    start.setDate(start.getDate() - (daysWindow - 1));
+    const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+
+    const stockOutLast30 = supplierMovements
+      .filter((m) => m.movement_type === 'stock_out')
+      .filter((m) => {
+        const d = (m.movement_date || m.created_at?.split('T')[0] || '').slice(0, 10);
+        return d && d >= startStr;
+      })
+      .reduce((sum, m) => sum + Number(m.quantity || 0), 0);
+
+    const avgDailyUsage = stockOutLast30 / daysWindow;
+    const daysOfCover = avgDailyUsage > 0 ? totalCurrentQty / avgDailyUsage : null;
+
+    const priceByItemId = new Map<
+      string,
+      { avgBuyCost: number | null; lastBuyCost: number | null; prevBuyCost: number | null; deltaPct: number | null }
+    >();
+
+    const stockInByItem = new Map<string, StockMovement[]>();
+    for (const m of stockInMovements) {
+      const itemId = m.inventory_item_id;
+      if (!itemId) continue;
+      if (m.unit_cost == null) continue;
+      const arr = stockInByItem.get(itemId) || [];
+      arr.push(m);
+      stockInByItem.set(itemId, arr);
+    }
+
+    for (const [itemId, arr] of stockInByItem.entries()) {
+      const sorted = arr
+        .slice()
+        .sort((a, b) => {
+          const da = a.movement_date || a.created_at || '';
+          const db = b.movement_date || b.created_at || '';
+          return db.localeCompare(da);
+        });
+
+      let sumQty = 0;
+      let sumValue = 0;
+      for (const m of sorted) {
+        const q = Number(m.quantity || 0);
+        const c = Number(m.unit_cost || 0);
+        if (!q || !c) continue;
+        sumQty += q;
+        sumValue += q * c;
+      }
+
+      const avgBuyCost = sumQty > 0 ? sumValue / sumQty : null;
+      const lastBuyCost = sorted[0]?.unit_cost != null ? Number(sorted[0].unit_cost) : null;
+      const prevBuyCost = sorted[1]?.unit_cost != null ? Number(sorted[1].unit_cost) : null;
+      const deltaPct = lastBuyCost != null && prevBuyCost != null && prevBuyCost !== 0 ? ((lastBuyCost - prevBuyCost) / prevBuyCost) * 100 : null;
+
+      priceByItemId.set(itemId, { avgBuyCost, lastBuyCost, prevBuyCost, deltaPct });
+    }
+
+    return {
+      totalCurrentQty,
+      lowStockItems,
+      lastPurchase,
+      stockOutLast30,
+      avgDailyUsage,
+      daysOfCover,
+      priceByItemId,
+    };
+  }, [selectedSupplier, supplierMovements]);
+
+  const exportSupplierLedgerCsv = () => {
+    if (!selectedSupplier) return;
+
+    const esc = (v: any) => {
+      const s = String(v ?? '');
+      if (s.includes('"') || s.includes(',') || s.includes('\n')) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    };
+
+    const rows = filteredSupplierMovements.map((m) => {
+      const date = (m.movement_date || m.created_at?.split('T')[0] || '').slice(0, 10);
+      const itemName = m.item?.item_name || '';
+      const type = m.movement_type.replace('_', ' ');
+      const qty = Number(m.quantity || 0);
+      const unitCost = m.unit_cost != null ? Number(m.unit_cost) : '';
+      const value = unitCost !== '' ? qty * Number(unitCost) : '';
+      const notes = m.notes || '';
+      return [date, itemName, type, qty, unitCost, value, notes].map(esc).join(',');
+    });
+
+    const header = ['Date', 'Item', 'Type', 'Qty', 'Unit Cost', 'Value', 'Notes'].join(',');
+    const csv = [header, ...rows].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+
+    const safeName = (selectedSupplier.name || 'supplier')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+    a.href = url;
+    a.download = `supplier-ledger-${safeName || 'export'}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const getSupplierLedgerRangeLabel = () => {
+    return supplierLedgerMovementRange === 'all'
+      ? 'All time'
+      : supplierLedgerMovementRange === 'custom'
+      ? `${supplierLedgerFromDate || '-'} to ${supplierLedgerToDate || '-'}`
+      : supplierLedgerMovementRange === '7d'
+      ? 'Last 7 days'
+      : supplierLedgerMovementRange === '30d'
+      ? 'Last 30 days'
+      : 'Last 90 days';
+  };
+
+  const buildSupplierLedgerPdf = async () => {
+    if (!selectedSupplier || !supplierLedgerStats || !supplierLedgerInsights) {
+      throw new Error('Supplier ledger data not ready');
+    }
+
+    const supplierName = selectedSupplier.name || 'Supplier';
+    const supplierContact = selectedSupplier.contact || '';
+    const rangeLabel = getSupplierLedgerRangeLabel();
+
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    const addPage = () => pdfDoc.addPage([595.28, 841.89]); // A4
+    let page = addPage();
+    let { width, height } = page.getSize();
+    let y = height - 48;
+    const marginX = 40;
+
+    const drawText = (text: string, x: number, size: number, isBold = false, color = rgb(0.12, 0.12, 0.12)) => {
+      page.drawText(text, { x, y, size, font: isBold ? fontBold : font, color });
+    };
+
+    const nextLine = (lineHeight: number) => {
+      y -= lineHeight;
+      if (y < 50) {
+        page = addPage();
+        ({ width, height } = page.getSize());
+        y = height - 48;
+      }
+    };
+
+    const rule = () => {
+      page.drawLine({ start: { x: marginX, y: y - 6 }, end: { x: width - marginX, y: y - 6 }, thickness: 1, color: rgb(0.9, 0.9, 0.9) });
+      nextLine(18);
+    };
+
+    drawText('Supplier Ledger', marginX, 18, true);
+    nextLine(24);
+    drawText(`Supplier: ${supplierName}${supplierContact ? ` • ${supplierContact}` : ''}`, marginX, 11);
+    nextLine(16);
+    drawText(`Range: ${rangeLabel} • Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm')}`, marginX, 10, false, rgb(0.35, 0.35, 0.35));
+    nextLine(18);
+    rule();
+
+    const kpi = [
+      ['Current Stock Value', `Rs. ${supplierLedgerStats.currentStockValue.toLocaleString()}`],
+      ['Stock-In Value', `Rs. ${supplierLedgerStats.totalStockInValue.toLocaleString()}`],
+      ['Low Stock Items', String(supplierLedgerInsights.lowStockItems.length)],
+      ['Days of Cover', supplierLedgerInsights.daysOfCover == null ? '-' : Math.max(0, supplierLedgerInsights.daysOfCover).toFixed(0)],
+      ['Last Purchase Date', (supplierLedgerInsights.lastPurchase?.movement_date || supplierLedgerInsights.lastPurchase?.created_at?.split('T')[0] || '-').slice(0, 10)],
+      ['Last Purchase Price', supplierLedgerInsights.lastPurchase?.unit_cost != null ? `Rs. ${Number(supplierLedgerInsights.lastPurchase.unit_cost).toLocaleString()}` : '-'],
+    ];
+
+    drawText('Overview', marginX, 12, true);
+    nextLine(18);
+
+    for (const [label, value] of kpi) {
+      drawText(label, marginX, 10, true);
+      drawText(String(value), marginX + 160, 10);
+      nextLine(14);
+    }
+
+    nextLine(6);
+    rule();
+
+    drawText('Items', marginX, 12, true);
+    nextLine(16);
+    drawText('Item', marginX, 10, true);
+    drawText('Category', marginX + 220, 10, true);
+    drawText('Qty', marginX + 360, 10, true);
+    drawText('Unit Cost', marginX + 410, 10, true);
+    drawText('Value', marginX + 500, 10, true);
+    nextLine(14);
+    rule();
+
+    const itemsSorted = selectedSupplier.items.slice().sort((a, b) => a.item_name.localeCompare(b.item_name));
+    if (itemsSorted.length === 0) {
+      drawText('No items', marginX, 10, false, rgb(0.45, 0.45, 0.45));
+      nextLine(16);
+    } else {
+      for (const it of itemsSorted) {
+        const qty = Number(it.current_quantity || 0);
+        const cost = Number(it.unit_cost || 0);
+        const value = qty * cost;
+        drawText(String(it.item_name || '-').slice(0, 40), marginX, 9);
+        drawText(String(it.category?.name || '-').slice(0, 22), marginX + 220, 9);
+        drawText(String(qty), marginX + 360, 9);
+        drawText(it.unit_cost ? `Rs. ${cost.toLocaleString()}` : '-', marginX + 410, 9);
+        drawText(`Rs. ${value.toLocaleString()}`, marginX + 500, 9);
+        nextLine(12);
+      }
+    }
+
+    nextLine(8);
+    rule();
+
+    drawText('Movements', marginX, 12, true);
+    nextLine(16);
+    drawText('Date', marginX, 10, true);
+    drawText('Item', marginX + 70, 10, true);
+    drawText('Type', marginX + 250, 10, true);
+    drawText('Qty', marginX + 320, 10, true);
+    drawText('Unit Cost', marginX + 360, 10, true);
+    drawText('Value', marginX + 445, 10, true);
+    drawText('Notes', marginX + 505, 10, true);
+    nextLine(14);
+    rule();
+
+    if (filteredSupplierMovements.length === 0) {
+      drawText('No movements', marginX, 10, false, rgb(0.45, 0.45, 0.45));
+      nextLine(16);
+    } else {
+      for (const m of filteredSupplierMovements) {
+        const date = (m.movement_date || m.created_at?.split('T')[0] || '-').slice(0, 10);
+        const itemName = (m.item?.item_name || '-').slice(0, 28);
+        const type = m.movement_type.replace('_', ' ');
+        const qty = Number(m.quantity || 0);
+        const unitCost = Number(m.unit_cost || 0);
+        const value = qty * unitCost;
+        const notes = (m.notes || '').replace(/\s+/g, ' ').slice(0, 18);
+
+        drawText(date, marginX, 8);
+        drawText(itemName, marginX + 70, 8);
+        drawText(type, marginX + 250, 8);
+        drawText(String(qty), marginX + 320, 8);
+        drawText(m.unit_cost != null ? `Rs. ${unitCost.toLocaleString()}` : '-', marginX + 360, 8);
+        drawText(`Rs. ${value.toLocaleString()}`, marginX + 445, 8);
+        drawText(notes || '-', marginX + 505, 8);
+        nextLine(11);
+      }
+    }
+
+    const pdfBase64 = await pdfDoc.saveAsBase64();
+    const binary = atob(pdfBase64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const safeName = (supplierName || 'supplier').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const fileName = `supplier-ledger-${safeName || 'export'}-${format(new Date(), 'yyyyMMdd-HHmm')}.pdf`;
+    return { blob, fileName };
+  };
+
+  const triggerPdfDownload = (blob: Blob, fileName: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadSupplierLedgerPdf = async () => {
+    if (isSupplierLedgerPdfBusy) return;
+    try {
+      setIsSupplierLedgerPdfBusy(true);
+      const { blob, fileName } = await buildSupplierLedgerPdf();
+      triggerPdfDownload(blob, fileName);
+    } catch (e: any) {
+      toast({ title: 'PDF Error', description: e?.message || 'Failed to generate PDF', variant: 'destructive' });
+    } finally {
+      setIsSupplierLedgerPdfBusy(false);
+    }
+  };
+
+  const viewSupplierLedgerPdf = async () => {
+    if (isSupplierLedgerPdfBusy) return;
+
+    try {
+      setIsSupplierLedgerPdfBusy(true);
+      const { blob } = await buildSupplierLedgerPdf();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      // revoke later to allow the new tab to load
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e: any) {
+      toast({ title: 'PDF Error', description: e?.message || 'Failed to generate PDF', variant: 'destructive' });
+    } finally {
+      setIsSupplierLedgerPdfBusy(false);
+    }
+  };
+
+  const shareSupplierLedgerWhatsApp = async () => {
+    if (!selectedSupplier || !supplierLedgerStats || !supplierLedgerInsights) return;
+    if (isSupplierLedgerPdfBusy) return;
+
+    const supplierName = selectedSupplier.name || 'Supplier';
+    const rangeLabel = getSupplierLedgerRangeLabel();
+
+    const lastPurchaseDate = (supplierLedgerInsights.lastPurchase?.movement_date || supplierLedgerInsights.lastPurchase?.created_at || '-').slice(0, 10);
+    const lastPurchaseItem = supplierLedgerInsights.lastPurchase?.item?.item_name || '-';
+    const lastPurchasePrice =
+      supplierLedgerInsights.lastPurchase?.unit_cost != null ? `Rs. ${Number(supplierLedgerInsights.lastPurchase.unit_cost).toLocaleString()}` : '-';
+
+    const topItems = selectedSupplier.items
+      .slice()
+      .sort((a, b) => (Number(b.current_quantity || 0) * Number(b.unit_cost || 0)) - (Number(a.current_quantity || 0) * Number(a.unit_cost || 0)))
+      .slice(0, 6)
+      .map((it) => {
+        const qty = Number(it.current_quantity || 0);
+        const cost = Number(it.unit_cost || 0);
+        const value = qty * cost;
+        return `${it.item_name}${it.category?.name ? ` (${it.category.name})` : ''} — Qty: ${qty}, Unit: Rs. ${cost.toLocaleString()}, Value: Rs. ${value.toLocaleString()}`;
+      })
+      .join('\n');
+
+    const lowStock = supplierLedgerInsights.lowStockItems
+      .slice()
+      .sort((a, b) => a.item_name.localeCompare(b.item_name))
+      .slice(0, 10)
+      .map((it) => `${it.item_name} — Qty: ${it.current_quantity}, Min: ${it.minimum_threshold}`)
+      .join('\n');
+
+    const msg =
+      `SUPPLIER LEDGER\n` +
+      `Supplier: ${supplierName}\n` +
+      `Period: ${rangeLabel}\n` +
+      `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm')}\n\n` +
+      `SUMMARY\n` +
+      `• Current Stock Value: Rs. ${supplierLedgerStats.currentStockValue.toLocaleString()}\n` +
+      `• Total Stock-In Value: Rs. ${supplierLedgerStats.totalStockInValue.toLocaleString()}\n` +
+      `• Stock-out (Last 30 Days): ${supplierLedgerInsights.stockOutLast30.toLocaleString()}\n` +
+      `• Low Stock Items: ${supplierLedgerInsights.lowStockItems.length}\n` +
+      `• Days of Cover: ${supplierLedgerInsights.daysOfCover == null ? '-' : Math.max(0, supplierLedgerInsights.daysOfCover).toFixed(0)}\n\n` +
+      `LAST PURCHASE\n` +
+      `• Date: ${lastPurchaseDate}\n` +
+      `• Item: ${lastPurchaseItem}\n` +
+      `• Unit Price: ${lastPurchasePrice}\n\n` +
+      (lowStock ? `LOW STOCK (Top ${Math.min(10, supplierLedgerInsights.lowStockItems.length)})\n${lowStock}\n\n` : '') +
+      (topItems ? `TOP ITEMS BY STOCK VALUE\n${topItems}\n\n` : '') +
+      `PDF\n` +
+      `The ledger PDF has been downloaded. Please attach it here in WhatsApp.`;
+
+    const raw = (selectedSupplier.contact || '').trim();
+    const digits = raw.replace(/\D+/g, '');
+    const phone = digits.startsWith('0') ? digits.slice(1) : digits;
+    const waUrl = `https://wa.me/${phone || ''}?text=${encodeURIComponent(msg)}`;
+
+    // Always open WhatsApp immediately (direct-to-WhatsApp) to avoid user-gesture / popup issues.
+    const waWindow = window.open(waUrl, '_blank', 'noopener,noreferrer');
+    if (!waWindow) {
+      toast({ title: 'Popup Blocked', description: 'Please allow popups to open WhatsApp.', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      setIsSupplierLedgerPdfBusy(true);
+      const { blob, fileName } = await buildSupplierLedgerPdf();
+      // PDF is downloaded so you can attach it in WhatsApp.
+      triggerPdfDownload(blob, fileName);
+    } catch (e: any) {
+      console.error('WhatsApp share error:', e);
+      toast({ title: 'Share Error', description: 'Could not open WhatsApp. Please check your connection or try again.', variant: 'destructive' });
+    } finally {
+      setIsSupplierLedgerPdfBusy(false);
+    }
+  };
 
   // Pagination calculations
   const totalItems = filteredItems.length;
@@ -620,6 +1240,18 @@ export default function Inventory() {
             <Button onClick={openCreateForm} className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               Add Item
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                setIsSupplierLedgerOpen(true);
+                if (!supplierLedgerKey && suppliers.length > 0) setSupplierLedgerKey(suppliers[0].key);
+              }}
+            >
+              <BookOpen className="h-4 w-4 mr-2" />
+              Supplier Ledger
             </Button>
           </div>
         </div>
@@ -1290,8 +1922,457 @@ export default function Inventory() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-        </div>
+
+      <Dialog
+        open={isSupplierLedgerOpen}
+        onOpenChange={(open) => {
+          if (!open && isSupplierLedgerPdfBusy) {
+            // Prevent closing while PDF is being generated
+            return;
+          }
+          setIsSupplierLedgerOpen(open);
+          if (!open) {
+            setSupplierLedgerKey('');
+            setSupplierLedgerTab('overview');
+            setSupplierLedgerMovementRange('30d');
+            setSupplierLedgerFromDate('');
+            setSupplierLedgerToDate('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Supplier Ledger</DialogTitle>
+            <DialogDescription>
+              Track supplied items and stock movements by supplier
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="form-label">Supplier</label>
+                <Select
+                  value={supplierLedgerKey}
+                  onValueChange={(v) => setSupplierLedgerKey(v)}
+                  disabled={suppliers.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={suppliers.length === 0 ? 'No suppliers found' : 'Select supplier'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {suppliers.map((s) => (
+                      <SelectItem key={s.key} value={s.key}>
+                        {(s.name || 'Unknown Supplier') + (s.contact ? ` • ${s.contact}` : '')}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <div className="text-xs text-muted-foreground">Contact</div>
+                <div className="text-sm font-medium">{selectedSupplier?.contact || '-'}</div>
+                <div className="text-xs text-muted-foreground mt-2">Supplier Name</div>
+                <div className="text-sm font-medium">{selectedSupplier?.name || '-'}</div>
+              </div>
+            </div>
+
+            {selectedSupplier && supplierLedgerStats && supplierLedgerInsights && (
+              <Tabs value={supplierLedgerTab} onValueChange={(v) => setSupplierLedgerTab(v as any)} className="w-full">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <TabsList className="w-full sm:w-auto">
+                    <TabsTrigger value="overview">Overview</TabsTrigger>
+                    <TabsTrigger value="items">Items</TabsTrigger>
+                    <TabsTrigger value="movements">Movements</TabsTrigger>
+                  </TabsList>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={viewSupplierLedgerPdf}
+                      disabled={!selectedSupplier || isSupplierLedgerPdfBusy}
+                    >
+                      <Printer className="h-4 w-4 mr-2" />
+                      View PDF
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={downloadSupplierLedgerPdf}
+                      disabled={!selectedSupplier || isSupplierLedgerPdfBusy}
+                    >
+                      <Printer className="h-4 w-4 mr-2" />
+                      {isSupplierLedgerPdfBusy ? 'Generating…' : 'Download PDF'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={shareSupplierLedgerWhatsApp}
+                      disabled={!selectedSupplier || isSupplierLedgerPdfBusy}
+                    >
+                      <Share2 className="h-4 w-4 mr-2" />
+                      WhatsApp
+                    </Button>
+                  </div>
+                </div>
+
+                <TabsContent value="overview">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3 rounded-lg border border-violet-500/30 bg-gradient-to-br from-violet-500/15 via-card to-card">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Current Stock Value</div>
+                          <div className="mt-1 text-xl font-semibold leading-none text-violet-700 dark:text-violet-200">Rs. {supplierLedgerStats.currentStockValue.toLocaleString()}</div>
+                          <div className="mt-2 text-xs text-muted-foreground">On-hand valuation</div>
+                        </div>
+                        <div className="h-9 w-9 rounded-lg bg-violet-500/20 border border-violet-500/30 flex items-center justify-center">
+                          <Wallet className="h-4 w-4 text-violet-700 dark:text-violet-200" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-3 rounded-lg border border-emerald-500/30 bg-gradient-to-br from-emerald-500/15 via-card to-card">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Stock-In Value</div>
+                          <div className="mt-1 text-xl font-semibold leading-none text-emerald-700 dark:text-emerald-200">Rs. {supplierLedgerStats.totalStockInValue.toLocaleString()}</div>
+                          <div className="mt-2 text-xs text-muted-foreground">Total purchase value</div>
+                        </div>
+                        <div className="h-9 w-9 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
+                          <ShoppingCart className="h-4 w-4 text-emerald-700 dark:text-emerald-200" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-3 rounded-lg border border-amber-500/30 bg-gradient-to-br from-amber-500/15 via-card to-card">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Low Stock Items</div>
+                          <div className="mt-1 text-xl font-semibold leading-none text-amber-700 dark:text-amber-200">{supplierLedgerInsights.lowStockItems.length}</div>
+                          <div className="mt-2 text-xs text-muted-foreground">Needs reorder</div>
+                        </div>
+                        <div className="h-9 w-9 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
+                          <AlertOctagon className="h-4 w-4 text-amber-700 dark:text-amber-200" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-3 rounded-lg border border-sky-500/30 bg-gradient-to-br from-sky-500/15 via-card to-card">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Days of Cover</div>
+                          <div className="mt-1 text-xl font-semibold leading-none text-sky-700 dark:text-sky-200">
+                            {supplierLedgerInsights.daysOfCover == null ? '-' : Math.max(0, supplierLedgerInsights.daysOfCover).toFixed(0)}
+                          </div>
+                          <div className="mt-2 text-xs text-muted-foreground">Based on last 30 days usage</div>
+                        </div>
+                        <div className="h-9 w-9 rounded-lg bg-sky-500/20 border border-sky-500/30 flex items-center justify-center">
+                          <Hourglass className="h-4 w-4 text-sky-700 dark:text-sky-200" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                    <div className="p-3 rounded-lg border bg-card">
+                      <div className="text-xs text-muted-foreground">Last Purchase Date</div>
+                      <div className="text-sm font-medium mt-1">
+                        {(supplierLedgerInsights.lastPurchase?.movement_date || supplierLedgerInsights.lastPurchase?.created_at?.split('T')[0] || '-')}
+                      </div>
+                    </div>
+                    <div className="p-3 rounded-lg border bg-card">
+                      <div className="text-xs text-muted-foreground">Last Purchase Price</div>
+                      <div className="text-sm font-medium mt-1">
+                        {supplierLedgerInsights.lastPurchase?.unit_cost != null
+                          ? `Rs. ${Number(supplierLedgerInsights.lastPurchase.unit_cost).toLocaleString()}`
+                          : '-'}
+                      </div>
+                    </div>
+                    <div className="p-3 rounded-lg border bg-card">
+                      <div className="text-xs text-muted-foreground">Avg Monthly Usage</div>
+                      <div className="text-sm font-medium mt-1">{supplierLedgerInsights.stockOutLast30.toLocaleString()}</div>
+                      <div className="text-xs text-muted-foreground mt-1">(Stock-out qty in last 30 days)</div>
+                    </div>
+                  </div>
+
+                  {supplierLedgerInsights.lowStockItems.length > 0 && (
+                    <div className="rounded-lg border bg-card mt-3 overflow-hidden">
+                      <div className="px-3 py-2 border-b">
+                        <div className="text-sm font-medium">Low Stock From This Supplier</div>
+                        <div className="text-xs text-muted-foreground">Quick reorder shortlist</div>
+                      </div>
+                      <div className="p-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {supplierLedgerInsights.lowStockItems
+                            .slice()
+                            .sort((a, b) => a.item_name.localeCompare(b.item_name))
+                            .slice(0, 8)
+                            .map((it) => (
+                              <div key={it.id} className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-medium truncate">{it.item_name}</div>
+                                  <div className="text-xs text-muted-foreground">{it.category?.name || '-'}</div>
+                                </div>
+                                <div className="text-right pl-3">
+                                  <div className="text-sm font-semibold">{it.current_quantity}</div>
+                                  <div className="text-xs text-muted-foreground">min {it.minimum_threshold}</div>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="items">
+                  <div className="rounded-lg border overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Item</TableHead>
+                          <TableHead>Category</TableHead>
+                          <TableHead className="text-right">Qty</TableHead>
+                          <TableHead className="text-right">Current Cost</TableHead>
+                          <TableHead className="text-right">Avg Buy Cost</TableHead>
+                          <TableHead className="text-right">Trend</TableHead>
+                          <TableHead className="text-right">Value</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedSupplier.items.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                              No items found for this supplier
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          selectedSupplier.items
+                            .slice()
+                            .sort((a, b) => a.item_name.localeCompare(b.item_name))
+                            .map((it) => {
+                              const p = supplierLedgerInsights.priceByItemId.get(it.id);
+                              const delta = p?.deltaPct ?? null;
+                              const trendUp = delta != null && delta > 0;
+                              const trendDown = delta != null && delta < 0;
+
+                              return (
+                                <TableRow key={it.id}>
+                                  <TableCell className="font-medium">{it.item_name}</TableCell>
+                                  <TableCell>{it.category?.name || '-'}</TableCell>
+                                  <TableCell className="text-right">{it.current_quantity}</TableCell>
+                                  <TableCell className="text-right">{it.unit_cost ? `Rs. ${it.unit_cost.toLocaleString()}` : '-'}</TableCell>
+                                  <TableCell className="text-right">
+                                    {p?.avgBuyCost != null
+                                      ? `Rs. ${p.avgBuyCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                                      : '-'}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    {delta == null ? (
+                                      <span className="text-muted-foreground">-</span>
+                                    ) : (
+                                      <span
+                                        className={cn(
+                                          'inline-flex items-center gap-1 font-medium',
+                                          trendUp && 'text-red-600 dark:text-red-400',
+                                          trendDown && 'text-emerald-600 dark:text-emerald-400',
+                                          !trendUp && !trendDown && 'text-muted-foreground',
+                                        )}
+                                      >
+                                        {trendUp ? <TrendingUp className="h-4 w-4" /> : trendDown ? <TrendingDown className="h-4 w-4" /> : null}
+                                        {Math.abs(delta).toFixed(1)}%
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-right font-medium">
+                                    Rs. {(Number(it.current_quantity || 0) * Number(it.unit_cost || 0)).toLocaleString()}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="movements">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <label className="form-label">Date Range</label>
+                      <Select value={supplierLedgerMovementRange} onValueChange={(v) => setSupplierLedgerMovementRange(v as any)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select range" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="7d">Last 7 days</SelectItem>
+                          <SelectItem value="30d">Last 30 days</SelectItem>
+                          <SelectItem value="90d">Last 90 days</SelectItem>
+                          <SelectItem value="all">All time</SelectItem>
+                          <SelectItem value="custom">Custom</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className={cn(supplierLedgerMovementRange !== 'custom' && 'opacity-70')}>
+                      <label className="form-label">From</label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className={cn('w-full justify-start text-left font-normal', !supplierLedgerFromDate && 'text-muted-foreground')}
+                            onClick={() => {
+                              if (supplierLedgerMovementRange !== 'custom') {
+                                setSupplierLedgerMovementRange('custom');
+                                if (!supplierLedgerToDate) setSupplierLedgerToDate(format(new Date(), 'yyyy-MM-dd'));
+                              }
+                            }}
+                          >
+                            <CalendarDays className="mr-2 h-4 w-4" />
+                            {supplierLedgerFromDate ? supplierLedgerFromDate : 'Pick a date'}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={supplierLedgerFromDate ? new Date(supplierLedgerFromDate) : undefined}
+                            onSelect={(d) => {
+                              if (!d) {
+                                setSupplierLedgerFromDate('');
+                                return;
+                              }
+                              if (supplierLedgerMovementRange !== 'custom') setSupplierLedgerMovementRange('custom');
+                              setSupplierLedgerFromDate(format(d, 'yyyy-MM-dd'));
+                            }}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    <div className={cn(supplierLedgerMovementRange !== 'custom' && 'opacity-70')}>
+                      <label className="form-label">To</label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className={cn('w-full justify-start text-left font-normal', !supplierLedgerToDate && 'text-muted-foreground')}
+                            onClick={() => {
+                              if (supplierLedgerMovementRange !== 'custom') {
+                                setSupplierLedgerMovementRange('custom');
+                                if (!supplierLedgerFromDate) setSupplierLedgerFromDate(format(new Date(), 'yyyy-MM-dd'));
+                              }
+                            }}
+                          >
+                            <CalendarDays className="mr-2 h-4 w-4" />
+                            {supplierLedgerToDate ? supplierLedgerToDate : 'Pick a date'}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={supplierLedgerToDate ? new Date(supplierLedgerToDate) : undefined}
+                            onSelect={(d) => {
+                              if (!d) {
+                                setSupplierLedgerToDate('');
+                                return;
+                              }
+                              if (supplierLedgerMovementRange !== 'custom') setSupplierLedgerMovementRange('custom');
+                              setSupplierLedgerToDate(format(d, 'yyyy-MM-dd'));
+                            }}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border overflow-hidden mt-3">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Item</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead className="text-right">Qty</TableHead>
+                          <TableHead className="text-right">Unit Cost</TableHead>
+                          <TableHead className="text-right">Value</TableHead>
+                          <TableHead className="w-[56px] text-center">Notes</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredSupplierMovements.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                              No stock movements in this date range
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredSupplierMovements.map((m) => (
+                            <TableRow key={m.id}>
+                              <TableCell className="whitespace-nowrap">
+                                {(m.movement_date || m.created_at?.split('T')[0] || '-').slice(0, 10)}
+                              </TableCell>
+                              <TableCell className="font-medium">{m.item?.item_name || '-'}</TableCell>
+                              <TableCell
+                                className={
+                                  'capitalize font-medium ' +
+                                  (m.movement_type === 'stock_in'
+                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                    : m.movement_type === 'stock_out'
+                                    ? 'text-red-600 dark:text-red-400'
+                                    : 'text-amber-600 dark:text-amber-400')
+                                }
+                              >
+                                {m.movement_type.replace('_', ' ')}
+                              </TableCell>
+                              <TableCell className="text-right">{m.quantity}</TableCell>
+                              <TableCell className="text-right">
+                                {m.unit_cost != null ? `Rs. ${Number(m.unit_cost).toLocaleString()}` : '-'}
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                Rs. {(Number(m.quantity || 0) * Number(m.unit_cost || 0)).toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {m.notes ? (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button type="button" className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground">
+                                        <MessageSquareText className="h-4 w-4" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-[320px]">
+                                      {m.notes}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsSupplierLedgerOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       </div>
+    </div>
     </TooltipProvider>
   );
 }
