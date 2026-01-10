@@ -44,6 +44,17 @@ create policy "clinic_requests_select_super_admin"
   to authenticated
   using (public.is_super_admin());
 
+drop policy if exists "clinic_requests_select_own" on public.clinic_requests;
+create policy "clinic_requests_select_own"
+  on public.clinic_requests
+  for select
+  to authenticated
+  using (
+    auth_user_id = auth.uid()
+    or user_email = (auth.jwt() ->> 'email')
+    or owner_email = (auth.jwt() ->> 'email')
+  );
+
 drop policy if exists "clinic_requests_update_super_admin" on public.clinic_requests;
 create policy "clinic_requests_update_super_admin"
   on public.clinic_requests

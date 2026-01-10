@@ -95,23 +95,42 @@ export default function SaasClinicRequests() {
 
     setIsWorking(true);
     try {
-      const slug = String(req.clinic_name || '')
+      const baseSlug = String(req.clinic_name || '')
         .trim()
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '')
-        .slice(0, 50);
+        .slice(0, 45); // leave room for suffix
 
-      const { data: clinicRow, error: clinicError } = await supabase
-        .from('clinics')
-        .insert({
-          name: req.clinic_name.trim(),
-          slug: slug || null,
-        })
-        .select('id')
-        .single();
+      let clinicRow: { id: string } | null = null;
+      let clinicError: any = null;
+      let slug = baseSlug || `clinic-${Date.now()}`;
 
-      if (clinicError || !clinicRow) {
+      // Retry with random suffix on duplicate slug (up to 3 attempts)
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const attemptSlug = attempt === 0 ? slug : `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
+        const { data, error } = await supabase
+          .from('clinics')
+          .insert({
+            name: req.clinic_name.trim(),
+            slug: attemptSlug,
+          })
+          .select('id')
+          .single();
+
+        if (!error && data) {
+          clinicRow = data;
+          slug = attemptSlug;
+          break;
+        }
+        clinicError = error;
+        // If it's not a unique violation, no point retrying
+        if (!error?.message?.includes('duplicate key') && !error?.message?.includes('unique')) {
+          break;
+        }
+      }
+
+      if (!clinicRow) {
         toast({
           title: 'Failed to create clinic',
           description: clinicError?.message || 'Unknown error',
@@ -166,10 +185,18 @@ export default function SaasClinicRequests() {
 
     setIsWorking(true);
     try {
-      const { error } = await supabase
-        .from('clinic_requests')
-        .update({ status: 'rejected' })
-        .eq('id', rejecting.id);
+      const base = supabase.from('clinic_requests').update({ status: 'rejected' });
+
+      const authUserId = rejecting.auth_user_id;
+      const userEmail = rejecting.user_email;
+
+      // Reject the selected request AND any other pending requests for the same user.
+      // This prevents a rejected user from still having another "pending" row that makes the app show "Approval Pending".
+      const { error } = await (authUserId
+        ? base.or(`id.eq.${rejecting.id},auth_user_id.eq.${authUserId}`).eq('status', 'pending')
+        : userEmail
+          ? base.or(`id.eq.${rejecting.id},user_email.eq.${userEmail}`).eq('status', 'pending')
+          : base.eq('id', rejecting.id));
 
       if (error) {
         toast({
