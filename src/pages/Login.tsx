@@ -15,6 +15,7 @@ export default function Login() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [formKey, setFormKey] = useState(0);
   const [clinicName, setClinicName] = useState('');
   const [clinicCity, setClinicCity] = useState('');
   const [clinicAddress, setClinicAddress] = useState('');
@@ -35,6 +36,21 @@ export default function Login() {
     requestedFrom.startsWith('/pending-approval/')
       ? '/'
       : requestedFrom;
+
+  const resetAuthForm = () => {
+    setShowPassword(false);
+    setEmail('');
+    setPassword('');
+    setClinicName('');
+    setClinicCity('');
+    setClinicAddress('');
+    setClinicPhone('');
+    setOwnerName('');
+    setOwnerPhone('');
+    setIsForgotPassword(false);
+    setResetEmailSent(false);
+    setFormKey((k) => k + 1);
+  };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -162,6 +178,9 @@ export default function Login() {
             title: 'Account created!',
             description: 'Please check your email to verify your account. Your clinic will be reviewed by the admin.',
           });
+
+          setIsSignUp(false);
+          resetAuthForm();
           return;
         }
       }
@@ -326,7 +345,11 @@ export default function Login() {
                 <div className="text-center">
                   <button
                     type="button"
-                    onClick={() => setIsForgotPassword(false)}
+                    onClick={() => {
+                      setIsForgotPassword(false);
+                      setShowPassword(false);
+                      setPassword('');
+                    }}
                     className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                   >
                     Back to Login
@@ -336,7 +359,7 @@ export default function Login() {
             )
           ) : (
             <>
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form key={formKey} onSubmit={handleSubmit} className="space-y-5">
                 {isSignUp && (
                   <>
                     <div className="space-y-2">
@@ -428,6 +451,7 @@ export default function Login() {
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <Input
+                      key={`email-${formKey}`}
                       id="email"
                       type="email"
                       placeholder="you@example.com"
@@ -447,7 +471,11 @@ export default function Login() {
                     {!isSignUp && (
                       <button
                         type="button"
-                        onClick={() => setIsForgotPassword(true)}
+                        onClick={() => {
+                          setIsForgotPassword(true);
+                          setShowPassword(false);
+                          setPassword('');
+                        }}
                         className="text-sm text-primary hover:text-primary/80 transition-colors"
                       >
                         Forgot password?
@@ -457,6 +485,7 @@ export default function Login() {
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <Input
+                      key={`password-${formKey}`}
                       id="password"
                       type={showPassword ? 'text' : 'password'}
                       placeholder="••••••••"
@@ -490,7 +519,21 @@ export default function Login() {
               <div className="text-center">
                 <button
                   type="button"
-                  onClick={() => setIsSignUp(!isSignUp)}
+                  onClick={() => {
+                    const next = !isSignUp;
+                    setIsSignUp(next);
+                    setIsForgotPassword(false);
+                    setResetEmailSent(false);
+                    setShowPassword(false);
+                    setEmail('');
+                    setPassword('');
+                    setClinicName('');
+                    setClinicCity('');
+                    setClinicAddress('');
+                    setClinicPhone('');
+                    setOwnerName('');
+                    setOwnerPhone('');
+                  }}
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}

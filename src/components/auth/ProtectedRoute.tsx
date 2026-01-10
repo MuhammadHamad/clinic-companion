@@ -31,7 +31,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="w-full max-w-md rounded-lg border bg-card p-6 text-card-foreground shadow-sm">
           <h1 className="text-lg font-semibold">Role lookup failed</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm text-`muted`-foreground">
              The app couldn’t load your access role from the database. This is usually caused by a database security policy
             (RLS) misconfiguration.
           </p>
