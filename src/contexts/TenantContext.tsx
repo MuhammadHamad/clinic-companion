@@ -17,6 +17,8 @@ type TenantContextValue = {
   activeClinic: ClinicRow | null;
   clinics: ClinicRow[];
   isLoading: boolean;
+  hasLoadedRole: boolean;
+  error: string | null;
   setActiveClinicId: (clinicId: string | null) => void;
   setActiveClinicName: (name: string) => void;
   refresh: () => Promise<void>;
@@ -56,6 +58,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [activeClinic, setActiveClinic] = useState<ClinicRow | null>(null);
   const [clinics, setClinics] = useState<ClinicRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoadedRole, setHasLoadedRole] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const applyCachedClinicName = useCallback((id: string | null) => {
     if (!id) return;
@@ -126,29 +130,50 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       setActiveClinic(null);
       setClinics([]);
       setIsLoading(false);
+      setHasLoadedRole(false);
+      setError(null);
       return null;
     }
 
     setIsLoading(true);
+    setHasLoadedRole(false);
+    setError(null);
+
+    try {
+      const url = (supabase as unknown as { supabaseUrl?: string }).supabaseUrl;
+      if (url) {
+        console.debug('[Tenant] supabaseUrl', url);
+      }
+    } catch {
+      // ignore
+    }
+
+    console.debug('[Tenant] loadRoleAndClinic user', user.id);
 
     const { data, error } = await supabase
       .from('user_roles')
       .select('role, clinic_id')
-      .eq('user_id', user.id)
-      .single();
+      .eq('user_id', user.id);
 
     if (error) {
+      console.error('[Tenant] user_roles query error', error);
+      setError(error.message || 'Failed to load user role');
       setRole(null);
       setClinicId(null);
       setActiveClinicIdState(null);
       setActiveClinic(null);
       setClinics([]);
       setIsLoading(false);
+      setHasLoadedRole(true);
       return null;
     }
 
-    const nextRole = (data?.role as AppRole) || null;
-    const nextClinicId = (data?.clinic_id as string | null) || null;
+    const rows = (data || []) as Array<{ role: AppRole; clinic_id: string | null }>;
+    console.debug('[Tenant] user_roles rows', rows);
+    const preferredRow = rows.find((r) => r.role === 'super_admin') || rows[0] || null;
+
+    const nextRole = preferredRow?.role || null;
+    const nextClinicId = preferredRow?.clinic_id || null;
 
     setRole(nextRole);
     setClinicId(nextClinicId);
@@ -168,6 +193,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     applyCachedClinicName(resolvedActiveClinicId);
 
     setIsLoading(false);
+    setHasLoadedRole(true);
 
     return resolvedActiveClinicId;
   }, [applyCachedClinicName, user, isAuthenticated]);
@@ -247,6 +273,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       activeClinic,
       clinics,
       isLoading,
+      hasLoadedRole,
+      error,
       setActiveClinicId,
       setActiveClinicName,
       refresh,
@@ -258,6 +286,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       activeClinic,
       clinics,
       isLoading,
+      hasLoadedRole,
+      error,
       setActiveClinicId,
       setActiveClinicName,
       refresh,

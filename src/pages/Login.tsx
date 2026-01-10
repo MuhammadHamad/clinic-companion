@@ -15,13 +15,26 @@ export default function Login() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [clinicName, setClinicName] = useState('');
+  const [clinicCity, setClinicCity] = useState('');
+  const [clinicAddress, setClinicAddress] = useState('');
+  const [clinicPhone, setClinicPhone] = useState('');
+  const [ownerName, setOwnerName] = useState('');
+  const [ownerPhone, setOwnerPhone] = useState('');
   
-  const { login, signUp } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
 
-  const from = location.state?.from?.pathname || '/';
+  const requestedFrom = location.state?.from?.pathname || '/';
+  const from =
+    !requestedFrom ||
+    requestedFrom === '/login' ||
+    requestedFrom === '/pending-approval' ||
+    requestedFrom.startsWith('/pending-approval/')
+      ? '/'
+      : requestedFrom;
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,6 +91,17 @@ export default function Login() {
       return;
     }
 
+    if (isSignUp) {
+      if (!clinicName.trim() || !ownerName.trim() || !ownerPhone.trim()) {
+        toast({
+          title: 'Error',
+          description: 'Please enter clinic name, owner name, and owner phone',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     if (password.length < 6) {
       toast({
         title: 'Error',
@@ -90,26 +114,69 @@ export default function Login() {
     setIsLoading(true);
     
     try {
-      const result = isSignUp 
-        ? await signUp(email, password)
-        : await login(email, password);
-      
-      if (result.success) {
+      if (isSignUp) {
+        const redirectUrl = `${window.location.origin}/`;
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: redirectUrl,
+          },
+        });
+
+        if (error) {
+          toast({
+            title: 'Sign up failed',
+            description: error.message,
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        const authUserId = data.user?.id || null;
+
+        const { error: reqError } = await supabase.from('clinic_requests').insert({
+          clinic_name: clinicName.trim(),
+          city: clinicCity.trim() || null,
+          address: clinicAddress.trim() || null,
+          phone: clinicPhone.trim() || null,
+          owner_name: ownerName.trim(),
+          owner_phone: ownerPhone.trim(),
+          owner_email: email.trim(),
+          user_email: email.trim(),
+          auth_user_id: authUserId,
+          status: 'pending',
+        });
+
+        if (reqError) {
+          toast({
+            title: 'Account created, but request failed',
+            description: reqError.message,
+            variant: 'destructive',
+          });
+          return;
+        }
+
         if (isSignUp) {
           toast({
             title: 'Account created!',
-            description: 'Please check your email to verify your account.',
+            description: 'Please check your email to verify your account. Your clinic will be reviewed by the admin.',
           });
-        } else {
-          toast({
-            title: 'Welcome back!',
-            description: 'You have successfully logged in',
-          });
-          navigate(from, { replace: true });
+          return;
         }
+      }
+
+      const result = await login(email, password);
+      
+      if (result.success) {
+        toast({
+          title: 'Welcome back!',
+          description: 'You have successfully logged in',
+        });
+        navigate(from, { replace: true });
       } else {
         toast({
-          title: isSignUp ? 'Sign up failed' : 'Login failed',
+          title: 'Login failed',
           description: result.error || 'Invalid credentials',
           variant: 'destructive',
         });
@@ -270,6 +337,90 @@ export default function Login() {
           ) : (
             <>
               <form onSubmit={handleSubmit} className="space-y-5">
+                {isSignUp && (
+                  <>
+                    <div className="space-y-2">
+                      <label htmlFor="clinicName" className="form-label">
+                        Clinic name
+                      </label>
+                      <Input
+                        id="clinicName"
+                        placeholder="e.g. Smile Dental Clinic"
+                        value={clinicName}
+                        onChange={(e) => setClinicName(e.target.value)}
+                        disabled={isLoading}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label htmlFor="clinicCity" className="form-label">
+                          City
+                        </label>
+                        <Input
+                          id="clinicCity"
+                          placeholder="e.g. Lahore"
+                          value={clinicCity}
+                          onChange={(e) => setClinicCity(e.target.value)}
+                          disabled={isLoading}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="clinicPhone" className="form-label">
+                          Clinic phone
+                        </label>
+                        <Input
+                          id="clinicPhone"
+                          placeholder="e.g. 03xx-xxxxxxx"
+                          value={clinicPhone}
+                          onChange={(e) => setClinicPhone(e.target.value)}
+                          disabled={isLoading}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="clinicAddress" className="form-label">
+                        Address
+                      </label>
+                      <Input
+                        id="clinicAddress"
+                        placeholder="e.g. Model Town, Street 5"
+                        value={clinicAddress}
+                        onChange={(e) => setClinicAddress(e.target.value)}
+                        disabled={isLoading}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label htmlFor="ownerName" className="form-label">
+                          Owner name
+                        </label>
+                        <Input
+                          id="ownerName"
+                          placeholder="e.g. Dr. Ali"
+                          value={ownerName}
+                          onChange={(e) => setOwnerName(e.target.value)}
+                          disabled={isLoading}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="ownerPhone" className="form-label">
+                          Owner phone
+                        </label>
+                        <Input
+                          id="ownerPhone"
+                          placeholder="e.g. 03xx-xxxxxxx"
+                          value={ownerPhone}
+                          onChange={(e) => setOwnerPhone(e.target.value)}
+                          disabled={isLoading}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 <div className="space-y-2">
                   <label htmlFor="email" className="form-label">
                     Email address

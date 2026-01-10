@@ -21,9 +21,11 @@ import Inventory from "./pages/Inventory";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import PendingApproval from "./pages/PendingApproval";
 import SaasOverview from "./pages/saas/SaasOverview";
 import SaasClinics from "./pages/saas/SaasClinics";
 import SaasUsers from "./pages/saas/SaasUsers";
+import SaasClinicRequests from "./pages/saas/SaasClinicRequests";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -49,6 +51,7 @@ const App = () => (
               {/* Public Routes */}
               <Route path="/login" element={<Login />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/pending-approval" element={<PendingApproval />} />
               
               {/* Protected Routes */}
               <Route
@@ -78,6 +81,7 @@ const App = () => (
                 }
               >
                 <Route index element={<SaasOverview />} />
+                <Route path="requests" element={<SaasClinicRequests />} />
                 <Route path="clinics" element={<SaasClinics />} />
                 <Route path="users" element={<SaasUsers />} />
               </Route>

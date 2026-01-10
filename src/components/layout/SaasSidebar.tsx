@@ -5,6 +5,7 @@ import {
   Users,
   LogOut,
   Shield,
+  Inbox,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTenant } from '@/contexts/TenantContext';
@@ -18,6 +19,7 @@ interface NavItem {
 
 const navigation: NavItem[] = [
   { name: 'Overview', href: '/saas', icon: LayoutDashboard },
+  { name: 'Requests', href: '/saas/requests', icon: Inbox },
   { name: 'Clinics', href: '/saas/clinics', icon: Building2 },
   { name: 'Users', href: '/saas/users', icon: Users },
 ];
