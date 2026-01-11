@@ -31,10 +31,41 @@ export default function SaasClinicRequests() {
   const [isLoading, setIsLoading] = useState(false);
   const [setupWarning, setSetupWarning] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [emailConfirmedAtByUserId, setEmailConfirmedAtByUserId] = useState<Record<string, string | null>>({});
 
   const [isRejectOpen, setIsRejectOpen] = useState(false);
   const [rejecting, setRejecting] = useState<ClinicRequestRow | null>(null);
   const [isWorking, setIsWorking] = useState(false);
+
+  const fetchEmailConfirmedAt = async (nextRows: ClinicRequestRow[]) => {
+    const ids = Array.from(
+      new Set(nextRows.map((r) => r.auth_user_id).filter((v): v is string => !!v)),
+    );
+
+    if (ids.length === 0) {
+      setEmailConfirmedAtByUserId({});
+      return;
+    }
+
+    const { data, error } = await supabase.rpc('get_users_email_confirmed_at', { user_ids: ids });
+
+    if (error) {
+      setEmailConfirmedAtByUserId({});
+      toast({
+        title: 'Email verification status unavailable',
+        description: error.message,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const map: Record<string, string | null> = {};
+    for (const row of (data as any[]) || []) {
+      if (!row?.user_id) continue;
+      map[String(row.user_id)] = row.email_confirmed_at ? String(row.email_confirmed_at) : null;
+    }
+    setEmailConfirmedAtByUserId(map);
+  };
 
   const fetchRequests = async () => {
     setIsLoading(true);
@@ -51,7 +82,9 @@ export default function SaasClinicRequests() {
       setRows([]);
       setSetupWarning('Clinic requests table is not accessible yet (missing table or RLS policy).');
     } else {
-      setRows((data || []) as ClinicRequestRow[]);
+      const nextRows = (data || []) as ClinicRequestRow[];
+      setRows(nextRows);
+      fetchEmailConfirmedAt(nextRows);
     }
 
     setIsLoading(false);
@@ -88,6 +121,16 @@ export default function SaasClinicRequests() {
       toast({
         title: 'Cannot approve',
         description: 'This request has no auth_user_id. Ask the clinic to sign up again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const emailConfirmedAt = emailConfirmedAtByUserId[req.auth_user_id] || null;
+    if (!emailConfirmedAt) {
+      toast({
+        title: 'Cannot approve',
+        description: 'User email is not verified yet. Ask them to verify their email first.',
         variant: 'destructive',
       });
       return;
@@ -228,6 +271,13 @@ export default function SaasClinicRequests() {
     return <Badge variant="outline">{status}</Badge>;
   };
 
+  const emailBadge = (authUserId: string | null) => {
+    if (!authUserId) return <Badge variant="outline">unknown</Badge>;
+    const confirmedAt = emailConfirmedAtByUserId[authUserId] || null;
+    if (confirmedAt) return <Badge className="bg-success text-success-foreground">verified</Badge>;
+    return <Badge variant="secondary">not verified</Badge>;
+  };
+
   return (
     <div className="min-h-screen">
       <Header title="Clinic Requests" subtitle="Approve or reject new clinic signups" />
@@ -272,6 +322,7 @@ export default function SaasClinicRequests() {
                   <TableHead>Clinic</TableHead>
                   <TableHead>Owner</TableHead>
                   <TableHead>Contact</TableHead>
+                  <TableHead>Email</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -280,7 +331,7 @@ export default function SaasClinicRequests() {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
                       No requests found
                     </TableCell>
                   </TableRow>
@@ -299,6 +350,7 @@ export default function SaasClinicRequests() {
                         <div>{r.phone || '—'}</div>
                         <div className="text-xs">{r.owner_phone || '—'}</div>
                       </TableCell>
+                      <TableCell>{emailBadge(r.auth_user_id)}</TableCell>
                       <TableCell>{statusBadge(r.status)}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {r.created_at ? new Date(r.created_at).toLocaleString() : '—'}
@@ -308,7 +360,12 @@ export default function SaasClinicRequests() {
                           <Button
                             size="sm"
                             onClick={() => approveRequest(r)}
-                            disabled={isWorking || String(r.status).toLowerCase() !== 'pending'}
+                            disabled={
+                              isWorking ||
+                              String(r.status).toLowerCase() !== 'pending' ||
+                              !r.auth_user_id ||
+                              !emailConfirmedAtByUserId[r.auth_user_id]
+                            }
                           >
                             Approve
                           </Button>
