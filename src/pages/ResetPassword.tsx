@@ -18,22 +18,55 @@ export default function ResetPassword() {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if user came from a password reset email
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setIsValidSession(true);
-      } else {
+    const initRecoverySession = async () => {
+      try {
+        // supabase recovery links can come as:
+        // - query param: ?code=... (PKCE)
+        // - hash fragment: #access_token=...&refresh_token=...&type=recovery
+        const url = new URL(window.location.href);
+        const code = url.searchParams.get('code');
+
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            toast({
+              title: 'Invalid or expired link',
+              description: error.message,
+              variant: 'destructive',
+            });
+            setIsValidSession(false);
+            setIsCheckingSession(false);
+            return;
+          }
+        }
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (session) {
+          setIsValidSession(true);
+        } else {
+          toast({
+            title: 'Invalid or expired link',
+            description: 'Please request a new password reset link.',
+            variant: 'destructive',
+          });
+          setIsValidSession(false);
+        }
+      } catch {
         toast({
           title: 'Invalid or expired link',
           description: 'Please request a new password reset link.',
           variant: 'destructive',
         });
+        setIsValidSession(false);
+      } finally {
+        setIsCheckingSession(false);
       }
-      setIsCheckingSession(false);
     };
 
-    checkSession();
+    initRecoverySession();
   }, [toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {

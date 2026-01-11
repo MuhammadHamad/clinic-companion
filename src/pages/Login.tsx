@@ -22,6 +22,7 @@ export default function Login() {
   const [clinicPhone, setClinicPhone] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [ownerPhone, setOwnerPhone] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
   
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -49,26 +50,46 @@ export default function Login() {
     setOwnerPhone('');
     setIsForgotPassword(false);
     setResetEmailSent(false);
+    setErrors({});
     setFormKey((k) => k + 1);
+  };
+
+  const formatPkPhone = (value: string) => {
+    const digits = String(value || '').replace(/\D/g, '').slice(0, 11);
+    if (digits.length <= 4) return digits;
+    return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  };
+
+  const getPkPhoneDigits = (value: string) => String(value || '').replace(/\D/g, '');
+
+  const isValidPkMobile = (value: string) => {
+    const digits = getPkPhoneDigits(value);
+    return digits.length === 11 && digits.startsWith('03');
+  };
+
+  const clearFieldError = (key: string) => {
+    setErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!email) {
-      toast({
-        title: 'Error',
-        description: 'Please enter your email address',
-        variant: 'destructive',
-      });
-      return;
-    }
+
+    const nextErrors: Record<string, string> = {};
+    if (!email.trim()) nextErrors.email = 'Email is required';
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
 
     setIsLoading(true);
     
     try {
+      const appUrl = String(import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/+$/, '');
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${appUrl}/reset-password`,
       });
 
       if (error) {
@@ -97,35 +118,47 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!email || !password) {
-      toast({
-        title: 'Error',
-        description: 'Please enter both email and password',
-        variant: 'destructive',
-      });
-      return;
-    }
+
+    const nextErrors: Record<string, string> = {};
+    if (!email.trim()) nextErrors.email = 'Email is required';
+    if (!password) nextErrors.password = 'Password is required';
 
     if (isSignUp) {
-      if (!clinicName.trim() || !ownerName.trim() || !ownerPhone.trim()) {
-        toast({
-          title: 'Error',
-          description: 'Please enter clinic name, owner name, and owner phone',
-          variant: 'destructive',
-        });
-        return;
+      if (!clinicName.trim()) nextErrors.clinicName = 'Clinic name is required';
+      if (!clinicCity.trim()) nextErrors.clinicCity = 'City is required';
+      if (!clinicPhone.trim()) nextErrors.clinicPhone = 'Clinic phone is required';
+      if (!clinicAddress.trim()) nextErrors.clinicAddress = 'Address is required';
+      if (!ownerName.trim()) nextErrors.ownerName = 'Owner name is required';
+      if (!ownerPhone.trim()) nextErrors.ownerPhone = 'Owner phone is required';
+
+      if (clinicPhone.trim() && !isValidPkMobile(clinicPhone)) {
+        nextErrors.clinicPhone = 'Enter a valid Pakistani mobile (11 digits, starts with 03) e.g. 0310-9876789';
+      }
+
+      if (ownerPhone.trim() && !isValidPkMobile(ownerPhone)) {
+        nextErrors.ownerPhone = 'Enter a valid Pakistani mobile (11 digits, starts with 03) e.g. 0310-9876789';
       }
     }
 
-    if (password.length < 6) {
-      toast({
-        title: 'Error',
-        description: 'Password must be at least 6 characters',
-        variant: 'destructive',
-      });
-      return;
+    if (isSignUp) {
+      if (password && password.length < 8) {
+        nextErrors.password = 'Password must be at least 8 characters';
+      } else if (password) {
+        const hasLower = /[a-z]/.test(password);
+        const hasUpper = /[A-Z]/.test(password);
+        const hasNumber = /\d/.test(password);
+        const hasSpecial = /[^A-Za-z0-9]/.test(password);
+
+        if (!hasLower || !hasUpper || !hasNumber || !hasSpecial) {
+          nextErrors.password = 'Use a strong password: upper + lower + number + special character';
+        }
+      }
+    } else if (password && password.length < 6) {
+      nextErrors.password = 'Password must be at least 6 characters';
     }
+
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
 
     setIsLoading(true);
     
@@ -324,11 +357,17 @@ export default function Login() {
                       type="email"
                       placeholder="you@example.com"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        clearFieldError('email');
+                      }}
                       className="pl-10"
                       disabled={isLoading}
                     />
                   </div>
+                  {!!errors.email && (
+                    <p className="text-sm text-destructive">{errors.email}</p>
+                  )}
                 </div>
 
                 <Button type="submit" className="w-full h-11" disabled={isLoading}>
@@ -370,9 +409,15 @@ export default function Login() {
                         id="clinicName"
                         placeholder="e.g. Smile Dental Clinic"
                         value={clinicName}
-                        onChange={(e) => setClinicName(e.target.value)}
+                        onChange={(e) => {
+                          setClinicName(e.target.value);
+                          clearFieldError('clinicName');
+                        }}
                         disabled={isLoading}
                       />
+                      {!!errors.clinicName && (
+                        <p className="text-sm text-destructive">{errors.clinicName}</p>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -384,9 +429,15 @@ export default function Login() {
                           id="clinicCity"
                           placeholder="e.g. Lahore"
                           value={clinicCity}
-                          onChange={(e) => setClinicCity(e.target.value)}
+                          onChange={(e) => {
+                            setClinicCity(e.target.value);
+                            clearFieldError('clinicCity');
+                          }}
                           disabled={isLoading}
                         />
+                        {!!errors.clinicCity && (
+                          <p className="text-sm text-destructive">{errors.clinicCity}</p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <label htmlFor="clinicPhone" className="form-label">
@@ -394,11 +445,19 @@ export default function Login() {
                         </label>
                         <Input
                           id="clinicPhone"
+                          inputMode="numeric"
+                          maxLength={12}
                           placeholder="e.g. 03xx-xxxxxxx"
                           value={clinicPhone}
-                          onChange={(e) => setClinicPhone(e.target.value)}
+                          onChange={(e) => {
+                            setClinicPhone(formatPkPhone(e.target.value));
+                            clearFieldError('clinicPhone');
+                          }}
                           disabled={isLoading}
                         />
+                        {!!errors.clinicPhone && (
+                          <p className="text-sm text-destructive">{errors.clinicPhone}</p>
+                        )}
                       </div>
                     </div>
 
@@ -410,9 +469,15 @@ export default function Login() {
                         id="clinicAddress"
                         placeholder="e.g. Model Town, Street 5"
                         value={clinicAddress}
-                        onChange={(e) => setClinicAddress(e.target.value)}
+                        onChange={(e) => {
+                          setClinicAddress(e.target.value);
+                          clearFieldError('clinicAddress');
+                        }}
                         disabled={isLoading}
                       />
+                      {!!errors.clinicAddress && (
+                        <p className="text-sm text-destructive">{errors.clinicAddress}</p>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -424,9 +489,15 @@ export default function Login() {
                           id="ownerName"
                           placeholder="e.g. Dr. Ali"
                           value={ownerName}
-                          onChange={(e) => setOwnerName(e.target.value)}
+                          onChange={(e) => {
+                            setOwnerName(e.target.value);
+                            clearFieldError('ownerName');
+                          }}
                           disabled={isLoading}
                         />
+                        {!!errors.ownerName && (
+                          <p className="text-sm text-destructive">{errors.ownerName}</p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <label htmlFor="ownerPhone" className="form-label">
@@ -434,11 +505,19 @@ export default function Login() {
                         </label>
                         <Input
                           id="ownerPhone"
+                          inputMode="numeric"
+                          maxLength={12}
                           placeholder="e.g. 03xx-xxxxxxx"
                           value={ownerPhone}
-                          onChange={(e) => setOwnerPhone(e.target.value)}
+                          onChange={(e) => {
+                            setOwnerPhone(formatPkPhone(e.target.value));
+                            clearFieldError('ownerPhone');
+                          }}
                           disabled={isLoading}
                         />
+                        {!!errors.ownerPhone && (
+                          <p className="text-sm text-destructive">{errors.ownerPhone}</p>
+                        )}
                       </div>
                     </div>
                   </>
@@ -456,11 +535,17 @@ export default function Login() {
                       type="email"
                       placeholder="you@example.com"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        clearFieldError('email');
+                      }}
                       className="pl-10"
                       disabled={isLoading}
                     />
                   </div>
+                  {!!errors.email && (
+                    <p className="text-sm text-destructive">{errors.email}</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -490,7 +575,10 @@ export default function Login() {
                       type={showPassword ? 'text' : 'password'}
                       placeholder="••••••••"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        clearFieldError('password');
+                      }}
                       className="pl-10 pr-10"
                       disabled={isLoading}
                     />
@@ -502,6 +590,9 @@ export default function Login() {
                       {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                     </button>
                   </div>
+                  {!!errors.password && (
+                    <p className="text-sm text-destructive">{errors.password}</p>
+                  )}
                 </div>
 
                 <Button type="submit" className="w-full h-11" disabled={isLoading}>
@@ -533,6 +624,7 @@ export default function Login() {
                     setClinicPhone('');
                     setOwnerName('');
                     setOwnerPhone('');
+                    setErrors({});
                   }}
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
