@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Stethoscope, Lock } from 'lucide-react';
+import { Eye, EyeOff, Stethoscope, Lock, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,9 +13,42 @@ export default function ResetPassword() {
   const [isLoading, setIsLoading] = useState(false);
   const [isValidSession, setIsValidSession] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const clearFieldError = (key: string) => {
+    setErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const isStrongPassword = (value: string) => {
+    if (!value || value.length < 8) return false;
+    const hasLower = /[a-z]/.test(value);
+    const hasUpper = /[A-Z]/.test(value);
+    const hasNumber = /\d/.test(value);
+    const hasSpecial = /[^A-Za-z0-9]/.test(value);
+    return hasLower && hasUpper && hasNumber && hasSpecial;
+  };
+
+  const renderStatusBadge = (state: 'ok' | 'bad') => {
+    return (
+      <div
+        className={
+          state === 'ok'
+            ? 'h-6 w-6 rounded-full bg-success/15 text-success flex items-center justify-center ring-1 ring-success/30'
+            : 'h-6 w-6 rounded-full bg-destructive/10 text-destructive flex items-center justify-center ring-1 ring-destructive/30'
+        }
+      >
+        {state === 'ok' ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
+      </div>
+    );
+  };
 
   useEffect(() => {
     const initRecoverySession = async () => {
@@ -71,24 +104,31 @@ export default function ResetPassword() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (password.length < 6) {
-      toast({
-        title: 'Error',
-        description: 'Password must be at least 6 characters',
-        variant: 'destructive',
-      });
-      return;
+
+    const nextErrors: Record<string, string> = {};
+
+    if (!password) {
+      nextErrors.password = 'Password is required';
+    } else if (password.length < 8) {
+      nextErrors.password = 'Password must be at least 8 characters';
+    } else {
+      const hasLower = /[a-z]/.test(password);
+      const hasUpper = /[A-Z]/.test(password);
+      const hasNumber = /\d/.test(password);
+      const hasSpecial = /[^A-Za-z0-9]/.test(password);
+      if (!hasLower || !hasUpper || !hasNumber || !hasSpecial) {
+        nextErrors.password = 'Use a strong password: upper + lower + number + special character';
+      }
     }
 
-    if (password !== confirmPassword) {
-      toast({
-        title: 'Error',
-        description: 'Passwords do not match',
-        variant: 'destructive',
-      });
-      return;
+    if (!confirmPassword) {
+      nextErrors.confirmPassword = 'Confirm password is required';
+    } else if (password && password !== confirmPassword) {
+      nextErrors.confirmPassword = 'Passwords do not match';
     }
+
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
 
     setIsLoading(true);
     
@@ -189,10 +229,20 @@ export default function ResetPassword() {
                 type={showPassword ? 'text' : 'password'}
                 placeholder="••••••••"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="pl-10 pr-10"
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  clearFieldError('password');
+                }}
+                className="pl-10 pr-20"
                 disabled={isLoading}
               />
+
+              {password.length > 0 && (
+                <div className="absolute right-10 top-1/2 -translate-y-1/2">
+                  {renderStatusBadge(isStrongPassword(password) ? 'ok' : 'bad')}
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
@@ -201,6 +251,9 @@ export default function ResetPassword() {
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
             </div>
+            {!!errors.password && (
+              <p className="text-sm text-destructive">{errors.password}</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -214,11 +267,31 @@ export default function ResetPassword() {
                 type={showPassword ? 'text' : 'password'}
                 placeholder="••••••••"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="pl-10"
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  clearFieldError('confirmPassword');
+                }}
+                className="pl-10 pr-20"
                 disabled={isLoading}
               />
+
+              {confirmPassword.length > 0 && (
+                <div className="absolute right-10 top-1/2 -translate-y-1/2">
+                  {renderStatusBadge(isStrongPassword(password) && password === confirmPassword ? 'ok' : 'bad')}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
             </div>
+            {!!errors.confirmPassword && (
+              <p className="text-sm text-destructive">{errors.confirmPassword}</p>
+            )}
           </div>
 
           <Button type="submit" className="w-full h-11" disabled={isLoading}>

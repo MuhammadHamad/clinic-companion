@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Eye, EyeOff, Stethoscope, Mail, Lock } from 'lucide-react';
+import { Eye, EyeOff, Stethoscope, Mail, Lock, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,6 +10,7 @@ import { useToast } from '@/hooks';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
@@ -42,6 +43,7 @@ export default function Login() {
     setShowPassword(false);
     setEmail('');
     setPassword('');
+    setConfirmPassword('');
     setClinicName('');
     setClinicCity('');
     setClinicAddress('');
@@ -65,6 +67,29 @@ export default function Login() {
   const isValidPkMobile = (value: string) => {
     const digits = getPkPhoneDigits(value);
     return digits.length === 11 && digits.startsWith('03');
+  };
+
+  const isStrongPassword = (value: string) => {
+    if (!value || value.length < 8) return false;
+    const hasLower = /[a-z]/.test(value);
+    const hasUpper = /[A-Z]/.test(value);
+    const hasNumber = /\d/.test(value);
+    const hasSpecial = /[^A-Za-z0-9]/.test(value);
+    return hasLower && hasUpper && hasNumber && hasSpecial;
+  };
+
+  const renderStatusBadge = (state: 'ok' | 'bad') => {
+    return (
+      <div
+        className={
+          state === 'ok'
+            ? 'h-6 w-6 rounded-full bg-success/15 text-success flex items-center justify-center ring-1 ring-success/30'
+            : 'h-6 w-6 rounded-full bg-destructive/10 text-destructive flex items-center justify-center ring-1 ring-destructive/30'
+        }
+      >
+        {state === 'ok' ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
+      </div>
+    );
   };
 
   const clearFieldError = (key: string) => {
@@ -130,6 +155,7 @@ export default function Login() {
       if (!clinicAddress.trim()) nextErrors.clinicAddress = 'Address is required';
       if (!ownerName.trim()) nextErrors.ownerName = 'Owner name is required';
       if (!ownerPhone.trim()) nextErrors.ownerPhone = 'Owner phone is required';
+      if (!confirmPassword) nextErrors.confirmPassword = 'Confirm password is required';
 
       if (clinicPhone.trim() && !isValidPkMobile(clinicPhone)) {
         nextErrors.clinicPhone = 'Enter a valid Pakistani mobile (11 digits, starts with 03) e.g. 0310-9876789';
@@ -143,15 +169,12 @@ export default function Login() {
     if (isSignUp) {
       if (password && password.length < 8) {
         nextErrors.password = 'Password must be at least 8 characters';
-      } else if (password) {
-        const hasLower = /[a-z]/.test(password);
-        const hasUpper = /[A-Z]/.test(password);
-        const hasNumber = /\d/.test(password);
-        const hasSpecial = /[^A-Za-z0-9]/.test(password);
+      } else if (password && !isStrongPassword(password)) {
+        nextErrors.password = 'Use a strong password: upper + lower + number + special character';
+      }
 
-        if (!hasLower || !hasUpper || !hasNumber || !hasSpecial) {
-          nextErrors.password = 'Use a strong password: upper + lower + number + special character';
-        }
+      if (password && confirmPassword && password !== confirmPassword) {
+        nextErrors.confirmPassword = 'Passwords do not match';
       }
     } else if (password && password.length < 6) {
       nextErrors.password = 'Password must be at least 6 characters';
@@ -579,9 +602,16 @@ export default function Login() {
                         setPassword(e.target.value);
                         clearFieldError('password');
                       }}
-                      className="pl-10 pr-10"
+                      className={isSignUp ? 'pl-10 pr-20' : 'pl-10 pr-10'}
                       disabled={isLoading}
                     />
+
+                    {isSignUp && password.length > 0 && (
+                      <div className="absolute right-10 top-1/2 -translate-y-1/2">
+                        {renderStatusBadge(isStrongPassword(password) ? 'ok' : 'bad')}
+                      </div>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
@@ -594,6 +624,48 @@ export default function Login() {
                     <p className="text-sm text-destructive">{errors.password}</p>
                   )}
                 </div>
+
+                {isSignUp && (
+                  <div className="space-y-2">
+                    <label htmlFor="confirmPassword" className="form-label">
+                      Confirm password
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                      <Input
+                        id="confirmPassword"
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="••••••••"
+                        value={confirmPassword}
+                        onChange={(e) => {
+                          setConfirmPassword(e.target.value);
+                          clearFieldError('confirmPassword');
+                        }}
+                        className="pl-10 pr-20"
+                        disabled={isLoading}
+                      />
+
+                      {confirmPassword.length > 0 && (
+                        <div className="absolute right-10 top-1/2 -translate-y-1/2">
+                          {renderStatusBadge(
+                            isStrongPassword(password) && password === confirmPassword ? 'ok' : 'bad',
+                          )}
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      </button>
+                    </div>
+                    {!!errors.confirmPassword && (
+                      <p className="text-sm text-destructive">{errors.confirmPassword}</p>
+                    )}
+                  </div>
+                )}
 
                 <Button type="submit" className="w-full h-11" disabled={isLoading}>
                   {isLoading ? (
@@ -618,6 +690,7 @@ export default function Login() {
                     setShowPassword(false);
                     setEmail('');
                     setPassword('');
+                    setConfirmPassword('');
                     setClinicName('');
                     setClinicCity('');
                     setClinicAddress('');
