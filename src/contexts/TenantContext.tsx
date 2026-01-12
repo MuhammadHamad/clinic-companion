@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 import { useAuth } from '@/contexts/AuthContext';
 
 export type AppRole = 'admin' | 'dentist' | 'receptionist' | 'super_admin';
@@ -142,13 +143,13 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     try {
       const url = (supabase as unknown as { supabaseUrl?: string }).supabaseUrl;
       if (url) {
-        console.debug('[Tenant] supabaseUrl', url);
+        logger.debug('[Tenant] supabaseUrl', url);
       }
     } catch {
       // ignore
     }
 
-    console.debug('[Tenant] loadRoleAndClinic user', user.id);
+    logger.debug('[Tenant] loadRoleAndClinic user', user.id);
 
     const { data, error } = await supabase
       .from('user_roles')
@@ -156,7 +157,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       .eq('user_id', user.id);
 
     if (error) {
-      console.error('[Tenant] user_roles query error', error);
+      logger.error('[Tenant] user_roles query error', error);
       setError(error.message || 'Failed to load user role');
       setRole(null);
       setClinicId(null);
@@ -169,7 +170,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     }
 
     const rows = (data || []) as Array<{ role: AppRole; clinic_id: string | null }>;
-    console.debug('[Tenant] user_roles rows', rows);
+    logger.debug('[Tenant] user_roles rows', rows);
     const preferredRow = rows.find((r) => r.role === 'super_admin') || rows[0] || null;
 
     const nextRole = preferredRow?.role || null;

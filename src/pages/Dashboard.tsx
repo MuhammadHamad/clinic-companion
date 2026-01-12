@@ -120,7 +120,7 @@ export default function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="card-stat-label">New Patients</p>
+                  <p className="card-stat-label">New Customers</p>
                   <p className="card-stat-value mt-1">{stats.today.new_patients}</p>
                 </div>
                 <div className="h-10 w-10 rounded-lg bg-chart-4/10 flex items-center justify-center">

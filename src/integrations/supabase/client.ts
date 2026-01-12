@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { logger } from '@/lib/logger';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -7,7 +8,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables. Please check your .env file.');
 }
 
-console.debug('[Supabase] VITE_SUPABASE_URL', supabaseUrl);
+logger.debug('[Supabase] VITE_SUPABASE_URL', supabaseUrl);
 
 const getProjectRef = (url: string): string | null => {
   try {

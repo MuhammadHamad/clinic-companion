@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks';
 
@@ -31,6 +32,7 @@ export default function SaasClinicRequests() {
   const [isLoading, setIsLoading] = useState(false);
   const [setupWarning, setSetupWarning] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
   const [emailConfirmedAtByUserId, setEmailConfirmedAtByUserId] = useState<Record<string, string | null>>({});
 
   const [isRejectOpen, setIsRejectOpen] = useState(false);
@@ -96,9 +98,14 @@ export default function SaasClinicRequests() {
   }, []);
 
   const filtered = useMemo(() => {
+    const next = rows.filter((r) => {
+      if (statusFilter === 'all') return true;
+      return String(r.status || '').toLowerCase() === statusFilter;
+    });
+
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) => {
+    if (!q) return next;
+    return next.filter((r) => {
       const hay = [
         r.clinic_name,
         r.city || '',
@@ -113,7 +120,7 @@ export default function SaasClinicRequests() {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [rows, search]);
+  }, [rows, search, statusFilter]);
 
   const approveRequest = async (req: ClinicRequestRow) => {
     if (isWorking) return;
@@ -305,6 +312,17 @@ export default function SaasClinicRequests() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-[280px]"
             />
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
+                <SelectItem value="all">All</SelectItem>
+              </SelectContent>
+            </Select>
             <Button variant="outline" onClick={fetchRequests} disabled={isLoading || isWorking}>
               Refresh
             </Button>

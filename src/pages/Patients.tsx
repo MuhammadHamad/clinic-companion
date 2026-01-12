@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
 import { 
@@ -62,14 +62,17 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { usePatients, useInvoices, useTreatmentTypes } from '@/hooks';
 import { supabase } from '@/integrations/supabase/client';
-import { Invoice, Patient, Payment, PaymentMethod, InvoiceItem } from '@/types';
+import { Invoice, Patient, Payment, PaymentMethod, InvoiceItem, TreatmentType } from '@/types';
 import { useToast } from '@/hooks';
 import { cn } from '@/lib/utils';
+import { logger } from '@/lib/logger';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { patientSchema, invoiceSchema, type PatientFormData } from '@/lib/validation';
 import { InvoiceViewDialog } from '@/components/invoices/InvoiceViewDialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+
+ type DraftInvoiceItem = Omit<InvoiceItem, 'id' | 'invoice_id'>;
 
 const statusColors: Record<string, string> = {
   draft: 'bg-muted text-muted-foreground',
@@ -80,9 +83,24 @@ const statusColors: Record<string, string> = {
 };
 
 export default function Patients() {
-  const { patients, isLoading, createPatient, updatePatient, archivePatient, restorePatient } = usePatients();
-  const { invoices, recordPayment, updateInvoiceDiscount, createInvoice } = useInvoices();
-  const { treatmentTypes } = useTreatmentTypes();
+  const {
+    pagedPatients,
+    pagedTotalCount,
+    isPageLoading,
+    fetchPatientsPage,
+    createPatient,
+    updatePatient,
+    archivePatient,
+    restorePatient,
+  } = usePatients({ autoFetch: false });
+  const {
+    recordPayment,
+    updateInvoiceDiscount,
+    createInvoice,
+    fetchInvoiceSummariesByPatientIds,
+    fetchInvoicesForPatient,
+  } = useInvoices({ autoFetch: false });
+  const { treatmentTypes, createTreatmentType, updateTreatmentType, deleteTreatmentType } = useTreatmentTypes();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
@@ -94,6 +112,19 @@ export default function Patients() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [duplicatePatientWarningForPhone, setDuplicatePatientWarningForPhone] = useState<string | null>(null);
   const { toast } = useToast();
+
+  // Services (Treatment Types) management state
+  const [isServicesDialogOpen, setIsServicesDialogOpen] = useState(false);
+  const [serviceFormMode, setServiceFormMode] = useState<'create' | 'edit'>('create');
+  const [selectedService, setSelectedService] = useState<TreatmentType | null>(null);
+  const [serviceFormData, setServiceFormData] = useState({
+    name: '',
+    code: '',
+    default_price: 0,
+    duration_minutes: 30,
+    category: '',
+    is_active: true,
+  });
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -117,13 +148,61 @@ export default function Patients() {
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [duplicatePatientInfo, setDuplicatePatientInfo] = useState<Patient | null>(null);
 
+  const [patientsStats, setPatientsStats] = useState({
+    total: 0,
+    active: 0,
+    newThisMonth: 0,
+  });
+
+  const refreshPatientsStats = useCallback(async () => {
+    try {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const startIso = start.toISOString();
+      const nextIso = next.toISOString();
+
+      const [totalRes, activeRes, newRes] = await Promise.all([
+        supabase
+          .from('patients')
+          .select('id', { count: 'exact', head: true })
+          .neq('status', 'archived'),
+        supabase
+          .from('patients')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'active'),
+        supabase
+          .from('patients')
+          .select('id', { count: 'exact', head: true })
+          .gte('created_at', startIso)
+          .lt('created_at', nextIso)
+          .neq('status', 'archived'),
+      ]);
+
+      setPatientsStats({
+        total: totalRes.count || 0,
+        active: activeRes.count || 0,
+        newThisMonth: newRes.count || 0,
+      });
+    } catch (e) {
+      logger.error('Error fetching patient stats:', e);
+    }
+  }, []);
+
   const [isInvoiceViewOpen, setIsInvoiceViewOpen] = useState(false);
   const [selectedInvoiceForView, setSelectedInvoiceForView] = useState<Invoice | null>(null);
+
+  const [invoiceSummariesByPatientId, setInvoiceSummariesByPatientId] = useState<
+    Record<string, { balance: number; lastVisit: string | null }>
+  >({});
+  const [totalOutstanding, setTotalOutstanding] = useState(0);
+  const [selectedPatientInvoices, setSelectedPatientInvoices] = useState<Invoice[]>([]);
+  const [isLoadingSelectedPatientInvoices, setIsLoadingSelectedPatientInvoices] = useState(false);
 
   const [isInvoiceCreateOpen, setIsInvoiceCreateOpen] = useState(false);
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
   const [invoiceFormData, setInvoiceFormData] = useState({
-    items: [{ description: '', tooth_number: '', quantity: 1, unit_price: 0, total: 0 }] as InvoiceItem[],
+    items: [{ description: '', tooth_number: '', quantity: 1, unit_price: 0, total: 0 }] as DraftInvoiceItem[],
     discount_amount: 0,
     tax_amount: 0,
     payment_terms: '',
@@ -152,21 +231,7 @@ export default function Patients() {
     notes: '',
   });
 
-  const filteredPatients = patients.filter(patient => {
-    const q = searchQuery.trim().toLowerCase();
-    const qDigits = q.replace(/\D/g, '');
-    const patientDigits = (patient.phone || '').replace(/\D/g, '');
-
-    const matchesSearch =
-      patient.first_name.toLowerCase().includes(q) ||
-      patient.last_name.toLowerCase().includes(q) ||
-      (qDigits.length > 0 ? patientDigits.includes(qDigits) : false) ||
-      patient.patient_number.toLowerCase().includes(q);
-    
-    const matchesStatus = statusFilter === 'all' ? patient.status !== 'archived' : patient.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
+  const currentPagePatients = pagedPatients;
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -174,57 +239,63 @@ export default function Patients() {
     if (q && q !== searchQuery) setSearchQuery(q);
   }, [location.search, searchQuery]);
 
-  const invoiceSummaryByPatientId = useMemo(() => {
-    const map = new Map<string, { balance: number; lastVisit: string | null }>();
+  useEffect(() => {
+    fetchPatientsPage({
+      page: currentPage,
+      pageSize,
+      searchQuery,
+      statusFilter,
+    });
+  }, [fetchPatientsPage, currentPage, pageSize, searchQuery, statusFilter]);
 
-    for (const inv of invoices) {
-      const patientId = inv.patient_id;
-      if (!patientId) continue;
+  useEffect(() => {
+    refreshPatientsStats();
+  }, [refreshPatientsStats]);
 
-      const current = map.get(patientId) || { balance: 0, lastVisit: null };
-      current.balance += Number(inv.balance || 0);
+  const refreshOutstandingTotal = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('patients')
+        .select('balance')
+        .neq('status', 'archived');
 
-      const visitDate = inv.invoice_date || inv.created_at?.split('T')[0] || null;
-      if (visitDate && (!current.lastVisit || visitDate > current.lastVisit)) {
-        current.lastVisit = visitDate;
-      }
+      if (error) throw error;
 
-      map.set(patientId, current);
+      const sum = (data || []).reduce((acc: number, row: any) => acc + Number(row.balance || 0), 0);
+      setTotalOutstanding(sum);
+    } catch (e) {
+      logger.error('Error fetching outstanding total:', e);
     }
+  }, []);
 
-    return map;
-  }, [invoices]);
+  useEffect(() => {
+    refreshOutstandingTotal();
+  }, [refreshOutstandingTotal]);
 
-  const activePatients = useMemo(
-    () => patients.filter((p) => p.status === 'active').length,
-    [patients]
-  );
+  useEffect(() => {
+    const ids = currentPagePatients.map((p) => p.id);
+    let cancelled = false;
 
-  const newPatientsThisMonth = useMemo(() => {
-    const now = new Date();
-    const month = now.getMonth();
-    const year = now.getFullYear();
+    (async () => {
+      const res = await fetchInvoiceSummariesByPatientIds(ids);
+      if (!res.success) return;
+      if (cancelled) return;
+      setInvoiceSummariesByPatientId(res.data);
+    })();
 
-    return patients.filter((p) => {
-      const createdAt = (p as any).created_at as string | undefined;
-      if (!createdAt) return false;
-      const d = new Date(createdAt);
-      if (Number.isNaN(d.getTime())) return false;
-      return d.getMonth() === month && d.getFullYear() === year;
-    }).length;
-  }, [patients]);
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPagePatients, fetchInvoiceSummariesByPatientIds]);
 
-  const totalOutstanding = useMemo(
-    () => invoices.reduce((sum, inv) => sum + Number(inv.balance || 0), 0),
-    [invoices]
-  );
-
-  // Pagination calculations
-  const totalPatients = filteredPatients.length;
-  const totalPages = Math.ceil(totalPatients / pageSize);
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, totalPatients);
-  const currentPagePatients = filteredPatients.slice(startIndex, endIndex);
+  // Pagination calculations (server-side)
+  const totalPatients = pagedTotalCount;
+  const totalPages = Math.max(1, Math.ceil(totalPatients / pageSize));
+  const startIndex = totalPatients === 0 ? -1 : (currentPage - 1) * pageSize;
+  const endIndex =
+    totalPatients === 0
+      ? 0
+      : Math.min(startIndex + currentPagePatients.length, totalPatients);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -299,11 +370,25 @@ export default function Patients() {
 
   const closeViewDialog = () => {
     setIsViewOpen(false);
+    setSelectedPatientInvoices([]);
+    setIsLoadingSelectedPatientInvoices(false);
 
     const params = new URLSearchParams(location.search);
     params.delete('viewPatientId');
     navigate({ pathname: location.pathname, search: params.toString() }, { replace: false });
   };
+
+  const refreshSelectedPatientInvoices = useCallback(
+    async (patientId: string) => {
+      setIsLoadingSelectedPatientInvoices(true);
+      const res = await fetchInvoicesForPatient(patientId);
+      if (res.success) {
+        setSelectedPatientInvoices(res.data);
+      }
+      setIsLoadingSelectedPatientInvoices(false);
+    },
+    [fetchInvoicesForPatient],
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -315,16 +400,63 @@ export default function Patients() {
       return;
     }
 
-    const patient = patients.find((p) => p.id === viewPatientId);
-    if (!patient) return;
+    const inPage = currentPagePatients.find((p) => p.id === viewPatientId);
+    if (!inPage) {
+      (async () => {
+        try {
+          const { data, error } = await supabase
+            .from('patients')
+            .select('*')
+            .eq('id', viewPatientId)
+            .single();
 
-    if (!selectedPatient || selectedPatient.id !== patient.id) {
-      setSelectedPatient(patient);
+          if (error) throw error;
+          if (!data) return;
+
+          const mapped = {
+            id: data.id,
+            patient_number: data.patient_number,
+            first_name: data.first_name,
+            last_name: data.last_name,
+            date_of_birth: data.date_of_birth || undefined,
+            gender: data.gender || undefined,
+            phone: data.phone,
+            email: data.email || undefined,
+            address: data.address || undefined,
+            city: data.city || undefined,
+            emergency_contact_name: data.emergency_contact_name || undefined,
+            emergency_contact_phone: data.emergency_contact_phone || undefined,
+            allergies: data.allergies || undefined,
+            current_medications: data.current_medications || undefined,
+            medical_conditions: data.medical_conditions || undefined,
+            registration_date: data.registration_date,
+            last_visit_date: data.last_visit_date || undefined,
+            notes: data.notes || undefined,
+            status: data.status,
+            created_at: data.created_at,
+            created_by: data.created_by || undefined,
+            balance: data.balance != null ? Number(data.balance) : undefined,
+            archived_at: data.archived_at || undefined,
+          } as Patient;
+
+          if (!selectedPatient || selectedPatient.id !== mapped.id) {
+            setSelectedPatient(mapped);
+          }
+          if (!isViewOpen) setIsViewOpen(true);
+        } catch (e) {
+          logger.error('Error fetching patient for view:', e);
+        }
+      })();
+      return;
+    }
+
+    if (!selectedPatient || selectedPatient.id !== inPage.id) {
+      setSelectedPatient(inPage);
     }
     if (!isViewOpen) {
       setIsViewOpen(true);
     }
-  }, [location.search, patients, isViewOpen, selectedPatient]);
+  }, [location.search, currentPagePatients, isViewOpen, selectedPatient]);
 
   const loadPatientPayments = async (patientId: string) => {
     try {
@@ -351,7 +483,7 @@ export default function Patients() {
 
       setPatientPayments(mapped);
     } catch (err) {
-      console.error('Error fetching patient payments:', err);
+      logger.error('Error fetching patient payments:', err);
     } finally {
       setIsLoadingPayments(false);
     }
@@ -361,6 +493,12 @@ export default function Patients() {
     if (!isViewOpen || !selectedPatient) return;
     loadPatientPayments(selectedPatient.id);
   }, [isViewOpen, selectedPatient?.id]);
+
+  useEffect(() => {
+    if (!selectedPatient) return;
+    if (!isViewOpen && !isStatementOpen) return;
+    refreshSelectedPatientInvoices(selectedPatient.id);
+  }, [isViewOpen, isStatementOpen, selectedPatient?.id, refreshSelectedPatientInvoices]);
 
   useEffect(() => {
     const cleanup = () => {
@@ -411,7 +549,7 @@ export default function Patients() {
   const openCreateInvoiceDialog = (patient: Patient) => {
     setSelectedPatient(patient);
     setInvoiceFormData({
-      items: [{ description: '', tooth_number: '', quantity: 1, unit_price: 0, total: 0 }] as InvoiceItem[],
+      items: [{ description: '', tooth_number: '', quantity: 1, unit_price: 0, total: 0 }] as DraftInvoiceItem[],
       discount_amount: 0,
       tax_amount: 0,
       payment_terms: '',
@@ -427,7 +565,7 @@ export default function Patients() {
     }));
   };
 
-  const updateInvoiceItem = (index: number, field: keyof InvoiceItem, value: string | number) => {
+  const updateInvoiceItem = (index: number, field: keyof DraftInvoiceItem, value: string | number) => {
     setInvoiceFormData((prev) => {
       const next = [...prev.items];
       (next[index] as any)[field] = value;
@@ -489,6 +627,10 @@ export default function Patients() {
       if (result.success) {
         toast({ title: 'Invoice Created', description: `Invoice created for Rs. ${total.toLocaleString()}` });
         setIsInvoiceCreateOpen(false);
+        await refreshOutstandingTotal();
+        if (selectedPatient) {
+          await refreshSelectedPatientInvoices(selectedPatient.id);
+        }
       } else {
         toast({ title: 'Error', description: result.error || 'Failed to create invoice', variant: 'destructive' });
       }
@@ -544,6 +686,8 @@ export default function Patients() {
         description: 'Payment has been updated successfully',
       });
       await loadPatientPayments(selectedPatient.id);
+      await refreshOutstandingTotal();
+      await refreshSelectedPatientInvoices(selectedPatient.id);
     } else {
       toast({
         title: 'Error',
@@ -569,6 +713,8 @@ export default function Patients() {
         title: 'Patient Archived',
         description: 'The patient record has been archived successfully.',
       });
+      fetchPatientsPage({ page: currentPage, pageSize, searchQuery, statusFilter });
+      refreshPatientsStats();
       setIsDeleteOpen(false);
       setPatientToDelete(null);
     } else {
@@ -598,6 +744,8 @@ export default function Patients() {
         title: 'Patient Restored',
         description: 'The patient has been restored to active status.',
       });
+      fetchPatientsPage({ page: currentPage, pageSize, searchQuery, statusFilter });
+      refreshPatientsStats();
       setIsRestoreOpen(false);
       setPatientToRestore(null);
     } else {
@@ -624,6 +772,9 @@ export default function Patients() {
         title: 'Patient Created',
         description: `${formData.first_name} ${formData.last_name} has been registered successfully`,
       });
+      fetchPatientsPage({ page: 1, pageSize, searchQuery, statusFilter });
+      refreshPatientsStats();
+      setCurrentPage(1);
       setIsFormOpen(false);
     } else {
       toast({
@@ -684,15 +835,52 @@ export default function Patients() {
 
     if (formMode === 'create') {
       const normalizedPhone = formData.phone.trim();
-      const existing = patients.find(
-        (p) => p.phone && p.phone.trim() === normalizedPhone
-      );
+      if (normalizedPhone && duplicatePatientWarningForPhone !== normalizedPhone) {
+        try {
+          const { data: existing, error } = await supabase
+            .from('patients')
+            .select('*')
+            .eq('phone', normalizedPhone)
+            .neq('status', 'archived')
+            .limit(1)
+            .maybeSingle();
 
-      if (existing && duplicatePatientWarningForPhone !== normalizedPhone) {
-        setDuplicatePatientWarningForPhone(normalizedPhone);
-        setDuplicatePatientInfo(existing);
-        setDuplicateModalOpen(true);
-        return;
+          if (error) throw error;
+          if (existing) {
+            const mapped = {
+              id: existing.id,
+              patient_number: existing.patient_number,
+              first_name: existing.first_name,
+              last_name: existing.last_name,
+              date_of_birth: existing.date_of_birth || undefined,
+              gender: existing.gender || undefined,
+              phone: existing.phone,
+              email: existing.email || undefined,
+              address: existing.address || undefined,
+              city: existing.city || undefined,
+              emergency_contact_name: existing.emergency_contact_name || undefined,
+              emergency_contact_phone: existing.emergency_contact_phone || undefined,
+              allergies: existing.allergies || undefined,
+              current_medications: existing.current_medications || undefined,
+              medical_conditions: existing.medical_conditions || undefined,
+              registration_date: existing.registration_date,
+              last_visit_date: existing.last_visit_date || undefined,
+              notes: existing.notes || undefined,
+              status: existing.status,
+              created_at: existing.created_at,
+              created_by: existing.created_by || undefined,
+              balance: existing.balance != null ? Number(existing.balance) : undefined,
+              archived_at: existing.archived_at || undefined,
+            } as Patient;
+
+            setDuplicatePatientWarningForPhone(normalizedPhone);
+            setDuplicatePatientInfo(mapped);
+            setDuplicateModalOpen(true);
+            return;
+          }
+        } catch (err) {
+          logger.error('Error checking duplicate patient phone:', err);
+        }
       }
     }
 
@@ -724,10 +912,10 @@ export default function Patients() {
     setIsSubmitting(false);
   };
 
-  if (isLoading) {
+  if (isPageLoading && currentPagePatients.length === 0) {
     return (
       <div className="min-h-screen">
-        <Header title="Patients" subtitle="Manage your patient records" />
+        <Header title="Customers" subtitle="Manage your customer records" />
         <div className="p-6 space-y-6">
           <div className="flex gap-4 justify-between">
             <Skeleton className="h-10 w-80" />
@@ -746,7 +934,7 @@ export default function Patients() {
   return (
     <TooltipProvider>
       <div className="min-h-screen">
-        <Header title="Patients" subtitle="Manage your patient records" />
+        <Header title="Customers" subtitle="Manage your customer records" />
       
       <div className="p-4 sm:p-6 space-y-6 animate-fade-in">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -756,8 +944,8 @@ export default function Patients() {
                 <Plus className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-xs sm:text-sm text-muted-foreground">Total Patients</p>
-                <p className="text-lg sm:text-xl font-bold">{patients.length}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Total Customers</p>
+                <p className="text-lg sm:text-xl font-bold">{patientsStats.total}</p>
               </div>
             </CardContent>
           </Card>
@@ -768,7 +956,7 @@ export default function Patients() {
               </div>
               <div>
                 <p className="text-xs sm:text-sm text-muted-foreground">Active</p>
-                <p className="text-lg sm:text-xl font-bold">{activePatients}</p>
+                <p className="text-lg sm:text-xl font-bold">{patientsStats.active}</p>
               </div>
             </CardContent>
           </Card>
@@ -779,7 +967,7 @@ export default function Patients() {
               </div>
               <div>
                 <p className="text-xs sm:text-sm text-muted-foreground">New This Month</p>
-                <p className="text-lg sm:text-xl font-bold">{newPatientsThisMonth}</p>
+                <p className="text-lg sm:text-xl font-bold">{patientsStats.newThisMonth}</p>
               </div>
             </CardContent>
           </Card>
@@ -802,7 +990,7 @@ export default function Patients() {
             <div className="patients-search relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by name, phone, or patient #..."
+                placeholder="Search by name, phone, or customer #..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -823,7 +1011,7 @@ export default function Patients() {
           </div>
           <Button onClick={openCreateForm} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
-            Add Patient
+            Add Customer
           </Button>
         </div>
 
@@ -858,7 +1046,7 @@ export default function Patients() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50">
-                  <TableHead className="font-semibold whitespace-nowrap">Patient #</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap">Customer #</TableHead>
                   <TableHead className="font-semibold whitespace-nowrap">Name</TableHead>
                   <TableHead className="font-semibold whitespace-nowrap">Age</TableHead>
                   <TableHead className="font-semibold whitespace-nowrap">Phone</TableHead>
@@ -872,12 +1060,12 @@ export default function Patients() {
               {currentPagePatients.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
-                    {totalPatients === 0 ? 'No patients found' : 'No patients on this page'}
+                    {totalPatients === 0 ? 'No customers found' : 'No customers on this page'}
                   </TableCell>
                 </TableRow>
               ) : (
                 currentPagePatients.map((patient) => {
-                  const summary = invoiceSummaryByPatientId.get(patient.id);
+                  const summary = invoiceSummariesByPatientId[patient.id];
                   const lastVisit = summary?.lastVisit || patient.last_visit_date || '-';
                   const balance = summary ? summary.balance : (patient.balance || 0);
 
@@ -1007,11 +1195,11 @@ export default function Patients() {
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{formMode === 'create' ? 'Register New Patient' : 'Edit Patient'}</DialogTitle>
+            <DialogTitle>{formMode === 'create' ? 'Register New Customer' : 'Edit Customer'}</DialogTitle>
             <DialogDescription>
               {formMode === 'create' 
-                ? 'Fill in the patient information below' 
-                : 'Update the patient information'
+                ? 'Fill in the customer information below' 
+                : 'Update the customer information'
               }
             </DialogDescription>
           </DialogHeader>
@@ -1054,7 +1242,7 @@ export default function Patients() {
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    placeholder="patient@email.com"
+                    placeholder="customer@email.com"
                   />
                 </div>
                 <div>
@@ -1183,16 +1371,23 @@ export default function Patients() {
       >
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto pr-2 patient-statement-print !bg-white !text-slate-900 !border-0">
           <DialogHeader>
-            <DialogTitle className="text-xl text-slate-900">Patient Statement</DialogTitle>
+            <DialogTitle className="text-xl text-slate-900">Customer Statement</DialogTitle>
             <DialogDescription className="text-slate-600">
               {selectedPatient
                 ? `Financial history for ${selectedPatient.first_name} ${selectedPatient.last_name}`
-                : 'Patient financial history'}
+                : 'Customer financial history'}
             </DialogDescription>
           </DialogHeader>
 
           {selectedPatient && (() => {
-            const patientInvoices = invoices.filter((inv) => inv.patient_id === selectedPatient.id);
+            if (isLoadingSelectedPatientInvoices) {
+              return (
+                <div className="rounded-lg border p-6 text-center text-muted-foreground">Loading statement...</div>
+              );
+            }
+
+            const patientInvoices = selectedPatientInvoices;
+            const invoiceNumberById = new Map(patientInvoices.map((inv) => [inv.id, inv.invoice_number] as const));
 
             type LedgerEntry = {
               id: string;
@@ -1221,7 +1416,7 @@ export default function Patients() {
                 type: 'payment' as const,
                 date: p.payment_date || p.created_at,
                 sortKey: (p.payment_date || p.created_at || ''),
-                reference: invoices.find((inv) => inv.id === p.invoice_id)?.invoice_number || '-',
+                reference: invoiceNumberById.get(p.invoice_id) || '-',
                 description: p.notes || 'Payment received',
                 debit: 0,
                 credit: p.amount,
@@ -1250,12 +1445,12 @@ export default function Patients() {
                 <div className="p-4 rounded-lg border bg-white text-slate-900 shadow-sm patient-statement-card">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <div className="text-xs font-medium text-slate-600">Patient</div>
+                      <div className="text-xs font-medium text-slate-600">Customer</div>
                       <div className="text-lg font-semibold text-slate-900">
                         {selectedPatient.first_name} {selectedPatient.last_name}
                       </div>
                       <div className="mt-1 text-xs text-slate-600">
-                        <span className="font-medium text-slate-700">Patient ID:</span> {selectedPatient.patient_number || '-'}
+                        <span className="font-medium text-slate-700">Customer ID:</span> {selectedPatient.patient_number || '-'}
                       </div>
                       <div className="mt-1 text-xs text-slate-600">
                         <span className="font-medium text-slate-700">Phone:</span> {selectedPatient.phone || '-'}
@@ -1439,7 +1634,14 @@ export default function Patients() {
               )}
 
               {(() => {
-                const patientInvoices = invoices.filter((inv) => inv.patient_id === selectedPatient.id);
+                if (isLoadingSelectedPatientInvoices) {
+                  return (
+                    <div className="rounded-lg border p-6 text-center text-muted-foreground">Loading cases...</div>
+                  );
+                }
+
+                const patientInvoices = selectedPatientInvoices;
+                const invoiceNumberById = new Map(patientInvoices.map((inv) => [inv.id, inv.invoice_number] as const));
 
                 const getInvoiceSortKey = (inv: any) => {
                   const invoiceDate = inv.invoice_date || inv.created_at || '';
@@ -1744,7 +1946,7 @@ export default function Patients() {
                                             ) : (
                                               <div className="mt-3 space-y-2">
                                                 {c.payments.map((p) => {
-                                                  const invNum = invoices.find((inv) => inv.id === p.invoice_id)?.invoice_number;
+                                                  const invNum = invoiceNumberById.get(p.invoice_id);
                                                   return (
                                                     <div key={p.id} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
                                                       <div className="min-w-0">
@@ -1805,7 +2007,7 @@ export default function Patients() {
                   openEditForm(selectedPatient);
                 }}>
                   <Pencil className="h-4 w-4 mr-2" />
-                  Edit Patient
+                  Edit Customer
                 </Button>
               </DialogFooter>
             </div>
@@ -1839,7 +2041,7 @@ export default function Patients() {
           <DialogHeader>
             <DialogTitle>Create Invoice</DialogTitle>
             <DialogDescription>
-              {selectedPatient ? `Patient: ${selectedPatient.first_name} ${selectedPatient.last_name}` : 'Create a new invoice'}
+              {selectedPatient ? `Customer: ${selectedPatient.first_name} ${selectedPatient.last_name}` : 'Create a new invoice'}
             </DialogDescription>
           </DialogHeader>
 
@@ -1859,13 +2061,17 @@ export default function Patients() {
                     <Select
                       value={item.description}
                       onValueChange={(v) => {
+                        if (v === '__manage_services__') {
+                          setIsServicesDialogOpen(true);
+                          return;
+                        }
                         const treatment = treatmentTypes.find((t) => t.name === v);
                         updateInvoiceItem(index, 'description', v);
                         if (treatment) updateInvoiceItem(index, 'unit_price', treatment.default_price);
                       }}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select treatment" />
+                        <SelectValue placeholder="Select service" />
                       </SelectTrigger>
                       <SelectContent>
                         {treatmentTypes.map((type) => (
@@ -1873,6 +2079,9 @@ export default function Patients() {
                             {type.name} - Rs. {type.default_price.toLocaleString()}
                           </SelectItem>
                         ))}
+                        <SelectItem value="__manage_services__" className="text-primary font-medium border-t mt-1 pt-2">
+                          + Manage Services
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -2057,11 +2266,11 @@ export default function Patients() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Archive Patient</AlertDialogTitle>
+            <AlertDialogTitle>Archive Customer</AlertDialogTitle>
             <AlertDialogDescription>
               {patientToDelete
-                ? `Are you sure you want to archive patient ${patientToDelete.first_name} ${patientToDelete.last_name}? The patient will be moved to the archived section and can be restored later.`
-                : 'Are you sure you want to archive this patient? The patient will be moved to the archived section and can be restored later.'}
+                ? `Are you sure you want to archive customer ${patientToDelete.first_name} ${patientToDelete.last_name}? The customer will be moved to the archived section and can be restored later.`
+                : 'Are you sure you want to archive this customer? The customer will be moved to the archived section and can be restored later.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2080,7 +2289,7 @@ export default function Patients() {
                   Archiving...
                 </>
               ) : (
-                'Archive Patient'
+                'Archive Customer'
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -2100,19 +2309,19 @@ export default function Patients() {
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Possible Duplicate Patient</DialogTitle>
+            <DialogTitle>Possible Duplicate Customer</DialogTitle>
             <DialogDescription>
-              A patient with this phone number already exists in the system.
+              A customer with this phone number already exists in the system.
             </DialogDescription>
           </DialogHeader>
           
           {duplicatePatientInfo && (
             <div className="p-4 bg-muted/50 rounded-lg space-y-2">
-              <h4 className="font-medium text-sm">Existing Patient:</h4>
+              <h4 className="font-medium text-sm">Existing Customer:</h4>
               <div className="text-sm space-y-1">
                 <div><span className="font-medium">Name:</span> {duplicatePatientInfo.first_name} {duplicatePatientInfo.last_name}</div>
                 <div><span className="font-medium">Phone:</span> {duplicatePatientInfo.phone}</div>
-                <div><span className="font-medium">Patient ID:</span> {duplicatePatientInfo.patient_number}</div>
+                <div><span className="font-medium">Customer ID:</span> {duplicatePatientInfo.patient_number}</div>
                 {duplicatePatientInfo.email && (
                   <div><span className="font-medium">Email:</span> {duplicatePatientInfo.email}</div>
                 )}
@@ -2146,11 +2355,11 @@ export default function Patients() {
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Restore Patient</DialogTitle>
+            <DialogTitle>Restore Customer</DialogTitle>
             <DialogDescription>
               {patientToRestore
-                ? `Are you sure you want to restore patient ${patientToRestore.first_name} ${patientToRestore.last_name}? The patient will be moved back to active status and can be edited again.`
-                : 'Are you sure you want to restore this patient? The patient will be moved back to active status and can be edited again.'}
+                ? `Are you sure you want to restore customer ${patientToRestore.first_name} ${patientToRestore.last_name}? The customer will be moved back to active status and can be edited again.`
+                : 'Are you sure you want to restore this customer? The customer will be moved back to active status and can be edited again.'}
             </DialogDescription>
           </DialogHeader>
           
@@ -2165,8 +2374,208 @@ export default function Patients() {
                   Restoring...
                 </>
               ) : (
-                'Restore Patient'
+                'Restore Customer'
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Services (Treatment Types) Management Dialog */}
+      <Dialog open={isServicesDialogOpen} onOpenChange={setIsServicesDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Manage Services</DialogTitle>
+            <DialogDescription>
+              Add, edit, or remove services that can be added to invoices.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Service Form */}
+            <div className="p-4 border rounded-lg bg-muted/30 space-y-4">
+              <h4 className="font-medium text-sm">
+                {serviceFormMode === 'create' ? 'Add New Service' : 'Edit Service'}
+              </h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Service Name *</Label>
+                  <Input
+                    value={serviceFormData.name}
+                    onChange={(e) => setServiceFormData({ ...serviceFormData, name: e.target.value })}
+                    placeholder="e.g., Consultation"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Code</Label>
+                  <Input
+                    value={serviceFormData.code}
+                    onChange={(e) => setServiceFormData({ ...serviceFormData, code: e.target.value })}
+                    placeholder="e.g., CONS-001"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Default Price (Rs.) *</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={serviceFormData.default_price}
+                    onChange={(e) => setServiceFormData({ ...serviceFormData, default_price: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Duration (minutes)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={serviceFormData.duration_minutes}
+                    onChange={(e) => setServiceFormData({ ...serviceFormData, duration_minutes: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Category</Label>
+                  <Input
+                    value={serviceFormData.category}
+                    onChange={(e) => setServiceFormData({ ...serviceFormData, category: e.target.value })}
+                    placeholder="e.g., General"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    if (!serviceFormData.name.trim()) {
+                      toast({ title: 'Error', description: 'Service name is required', variant: 'destructive' });
+                      return;
+                    }
+                    if (serviceFormMode === 'create') {
+                      const result = await createTreatmentType({
+                        name: serviceFormData.name.trim(),
+                        code: serviceFormData.code || undefined,
+                        default_price: serviceFormData.default_price,
+                        duration_minutes: serviceFormData.duration_minutes,
+                        category: serviceFormData.category || 'General',
+                        is_active: true,
+                      });
+                      if (result.success) {
+                        toast({ title: 'Service Created', description: `${serviceFormData.name} has been added` });
+                        setServiceFormData({ name: '', code: '', default_price: 0, duration_minutes: 30, category: '', is_active: true });
+                      } else {
+                        toast({ title: 'Error', description: result.error || 'Failed to create service', variant: 'destructive' });
+                      }
+                    } else if (selectedService) {
+                      const result = await updateTreatmentType(selectedService.id, {
+                        name: serviceFormData.name.trim(),
+                        code: serviceFormData.code || undefined,
+                        default_price: serviceFormData.default_price,
+                        duration_minutes: serviceFormData.duration_minutes,
+                        category: serviceFormData.category || 'General',
+                        is_active: serviceFormData.is_active,
+                      });
+                      if (result.success) {
+                        toast({ title: 'Service Updated', description: `${serviceFormData.name} has been updated` });
+                        setServiceFormMode('create');
+                        setSelectedService(null);
+                        setServiceFormData({ name: '', code: '', default_price: 0, duration_minutes: 30, category: '', is_active: true });
+                      } else {
+                        toast({ title: 'Error', description: result.error || 'Failed to update service', variant: 'destructive' });
+                      }
+                    }
+                  }}
+                >
+                  {serviceFormMode === 'create' ? 'Add Service' : 'Update Service'}
+                </Button>
+                {serviceFormMode === 'edit' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setServiceFormMode('create');
+                      setSelectedService(null);
+                      setServiceFormData({ name: '', code: '', default_price: 0, duration_minutes: 30, category: '', is_active: true });
+                    }}
+                  >
+                    Cancel Edit
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Services List */}
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead>Service Name</TableHead>
+                    <TableHead>Code</TableHead>
+                    <TableHead className="text-right">Price</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {treatmentTypes.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        No services defined yet. Add your first service above.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    treatmentTypes.map((service) => (
+                      <TableRow key={service.id}>
+                        <TableCell className="font-medium">{service.name}</TableCell>
+                        <TableCell className="text-muted-foreground">{service.code || '-'}</TableCell>
+                        <TableCell className="text-right">Rs. {service.default_price.toLocaleString()}</TableCell>
+                        <TableCell>{service.category || '-'}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setServiceFormMode('edit');
+                                setSelectedService(service);
+                                setServiceFormData({
+                                  name: service.name,
+                                  code: service.code || '',
+                                  default_price: service.default_price,
+                                  duration_minutes: service.duration_minutes,
+                                  category: service.category || '',
+                                  is_active: service.is_active,
+                                });
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-destructive hover:text-destructive"
+                              onClick={async () => {
+                                const result = await deleteTreatmentType(service.id);
+                                if (result.success) {
+                                  toast({ title: 'Service Deleted', description: `${service.name} has been removed` });
+                                } else {
+                                  toast({ title: 'Error', description: result.error || 'Failed to delete service', variant: 'destructive' });
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsServicesDialogOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -384,23 +384,10 @@ export default function SaasUsers() {
                       <TableCell>
                         {u.role === 'super_admin' ? (
                           <span className="text-sm text-muted-foreground">All clinics</span>
+                        ) : u.clinic ? (
+                          <span className="text-sm">{u.clinic.name}</span>
                         ) : (
-                          <Select
-                            value={u.clinic_id || 'none'}
-                            onValueChange={(v) => updateClinic(u.user_id, v === 'none' ? null : v)}
-                          >
-                            <SelectTrigger className="inline-flex w-56">
-                              <SelectValue placeholder="Select clinic" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Unassigned</SelectItem>
-                              {clinics.map((c) => (
-                                <SelectItem key={c.id} value={c.id}>
-                                  {c.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <span className="text-sm text-muted-foreground">Unassigned</span>
                         )}
                       </TableCell>
                       <TableCell className="text-muted-foreground">

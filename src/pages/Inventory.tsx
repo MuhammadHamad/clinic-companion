@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { logger } from '@/lib/logger';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -102,6 +103,11 @@ export default function Inventory() {
     createCategory,
     updateCategory,
     deleteCategory,
+    // Server-side pagination
+    pagedItems,
+    pagedTotalCount,
+    isPageLoading,
+    fetchItemsPage,
   } = useInventory();
   const location = useLocation();
   const navigate = useNavigate();
@@ -248,6 +254,7 @@ export default function Inventory() {
     notes: '',
   });
 
+  // Stats are still computed from full items list (fetched on mount)
   const stats = {
     total: items.length,
     low_stock: items.filter(i => i.status === 'low_stock').length,
@@ -255,14 +262,8 @@ export default function Inventory() {
     total_value: items.reduce((sum, i) => sum + (i.current_quantity * (i.unit_cost || 0)), 0),
   };
 
-  const filteredItems = items.filter(item => {
-    const matchesSearch = item.item_name.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesCategory = categoryFilter === 'all' || item.category_id === categoryFilter;
-    const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
-    
-    return matchesSearch && matchesCategory && matchesStatus;
-  });
+  // Use server-side paginated items for display
+  const currentPageItems = pagedItems;
 
   const suppliers = useMemo(() => {
     const normalize = (v?: string | null) => (v || '').trim();
@@ -759,19 +760,42 @@ export default function Inventory() {
       // PDF is downloaded so you can attach it in WhatsApp.
       triggerPdfDownload(blob, fileName);
     } catch (e: any) {
-      console.error('WhatsApp share error:', e);
+      logger.error('WhatsApp share error:', e);
       toast({ title: 'Share Error', description: 'Could not open WhatsApp. Please check your connection or try again.', variant: 'destructive' });
     } finally {
       setIsSupplierLedgerPdfBusy(false);
     }
   };
 
-  // Pagination calculations
-  const totalItems = filteredItems.length;
-  const totalPages = Math.ceil(totalItems / pageSize);
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, totalItems);
-  const currentPageItems = filteredItems.slice(startIndex, endIndex);
+  // Pagination calculations (server-side)
+  const totalItems = pagedTotalCount;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const startIndex = totalItems === 0 ? -1 : (currentPage - 1) * pageSize;
+  const endIndex = totalItems === 0 ? 0 : Math.min(startIndex + currentPageItems.length, totalItems);
+
+  // Helper to refresh current page after mutations
+  const refreshCurrentPage = useCallback(() => {
+    fetchItemsPage({
+      page: currentPage,
+      pageSize,
+      searchQuery,
+      categoryFilter,
+      statusFilter,
+    });
+    // Also refresh full items list for stats
+    fetchItems();
+  }, [currentPage, pageSize, searchQuery, categoryFilter, statusFilter, fetchItemsPage, fetchItems]);
+
+  // Fetch page when filters or page changes
+  useEffect(() => {
+    fetchItemsPage({
+      page: currentPage,
+      pageSize,
+      searchQuery,
+      categoryFilter,
+      statusFilter,
+    });
+  }, [currentPage, pageSize, searchQuery, categoryFilter, statusFilter, fetchItemsPage]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -871,6 +895,8 @@ export default function Inventory() {
           ? `${formData.item_name} has been added to inventory`
           : 'Inventory item has been updated successfully',
       });
+      // Refresh page data after mutation
+      refreshCurrentPage();
     } else {
       toast({
         title: 'Error',
@@ -947,6 +973,8 @@ export default function Inventory() {
       });
       setIsDeleteOpen(false);
       setItemToDelete(null);
+      // Refresh page data after deletion
+      refreshCurrentPage();
     } else {
       toast({
         title: 'Error',
@@ -1107,6 +1135,8 @@ export default function Inventory() {
         title: 'Stock Updated',
         description: `${selectedItem.item_name} quantity updated`,
       });
+      // Refresh page data after stock movement
+      refreshCurrentPage();
     } else {
       toast({
         title: 'Error',

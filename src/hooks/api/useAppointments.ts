@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 import { Appointment, AppointmentStatus, AppointmentType, Patient } from '@/types';
 import { useToast } from '@/hooks';
 
@@ -48,7 +49,7 @@ export function useAppointments() {
 
       setAppointments(mappedAppointments);
     } catch (error: any) {
-      console.error('Error fetching appointments:', error);
+      logger.error('Error fetching appointments:', error);
       toast({
         title: 'Error',
         description: 'Failed to fetch appointments',
@@ -92,7 +93,7 @@ export function useAppointments() {
       await fetchAppointments();
       return { success: true, data };
     } catch (error: any) {
-      console.error('Error creating appointment:', error);
+      logger.error('Error creating appointment:', error);
       return { success: false, error: error.message };
     }
   };
@@ -109,7 +110,7 @@ export function useAppointments() {
       await fetchAppointments();
       return { success: true };
     } catch (error: any) {
-      console.error('Error updating appointment:', error);
+      logger.error('Error updating appointment:', error);
       return { success: false, error: error.message };
     }
   };

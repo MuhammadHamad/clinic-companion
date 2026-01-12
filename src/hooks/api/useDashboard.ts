@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 import { DashboardStats, Appointment, AppointmentStatus, Patient } from '@/types';
 import { useToast } from '@/hooks';
 
@@ -254,7 +255,7 @@ export function useDashboard() {
 
       setRevenueData(chartData);
     } catch (error: any) {
-      console.error('Error fetching dashboard data:', error);
+      logger.error('Error fetching dashboard data:', error);
       toast({
         title: 'Error',
         description: 'Failed to fetch dashboard data',

@@ -1,7 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 import { InventoryItem, InventoryCategory, InventoryStatus, MovementType, StockMovement } from '@/types';
 import { useToast } from '@/hooks';
+
+type ItemsPageParams = {
+  page: number;
+  pageSize: number;
+  searchQuery?: string;
+  categoryFilter?: string;
+  statusFilter?: string;
+};
 
 export function useInventory() {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -9,6 +18,11 @@ export function useInventory() {
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+
+  // Server-side pagination state
+  const [pagedItems, setPagedItems] = useState<InventoryItem[]>([]);
+  const [pagedTotalCount, setPagedTotalCount] = useState(0);
+  const [isPageLoading, setIsPageLoading] = useState(false);
 
   const generateItemCode = () => {
     try {
@@ -48,7 +62,7 @@ export function useInventory() {
   const seedDefaultCategories = async () => {
     // Skip auto-seeding for now due to global unique constraint issue
     // Users will create categories manually as needed
-    console.log('Auto-seeding disabled due to global unique constraint. Users will create categories manually.');
+    logger.log('Auto-seeding disabled due to global unique constraint. Users will create categories manually.');
     return;
     
     /* Original seeding code disabled for now
@@ -87,7 +101,7 @@ export function useInventory() {
       );
 
       if (categoriesToInsert.length === 0) {
-        console.log('Default categories already exist for clinic');
+        logger.log('Default categories already exist for clinic');
         return;
       }
 
@@ -102,12 +116,12 @@ export function useInventory() {
         );
 
       if (error) {
-        console.error('Error seeding default categories:', error);
+        logger.error('Error seeding default categories:', error);
       } else {
-        console.log(`Seeded ${categoriesToInsert.length} default categories`);
+        logger.log(`Seeded ${categoriesToInsert.length} default categories`);
       }
     } catch (error) {
-      console.error('Error seeding default categories:', error);
+      logger.error('Error seeding default categories:', error);
     }
     */
   };
@@ -129,7 +143,7 @@ export function useInventory() {
 
       setCategories(categories);
     } catch (error: any) {
-      console.error('Error fetching categories:', error);
+      logger.error('Error fetching categories:', error);
     }
   }, []);
 
@@ -148,7 +162,7 @@ export function useInventory() {
 
       setItems((data || []).map(mapRowToItem));
     } catch (error: any) {
-      console.error('Error fetching inventory:', error);
+      logger.error('Error fetching inventory:', error);
       toast({
         title: 'Error',
         description: 'Failed to fetch inventory',
@@ -158,6 +172,58 @@ export function useInventory() {
       setIsLoading(false);
     }
   }, [toast]);
+
+  const fetchItemsPage = useCallback(
+    async ({ page, pageSize, searchQuery, categoryFilter, statusFilter }: ItemsPageParams) => {
+      try {
+        setIsPageLoading(true);
+        const from = (page - 1) * pageSize;
+        const to = from + pageSize - 1;
+
+        let query = supabase
+          .from('inventory_items')
+          .select(
+            `
+            *,
+            category:inventory_categories(*)
+          `,
+            { count: 'exact' }
+          )
+          .order('created_at', { ascending: false });
+
+        // Apply search filter
+        if (searchQuery && searchQuery.trim()) {
+          query = query.ilike('item_name', `%${searchQuery.trim()}%`);
+        }
+
+        // Apply category filter
+        if (categoryFilter && categoryFilter !== 'all') {
+          query = query.eq('category_id', categoryFilter);
+        }
+
+        // Apply status filter
+        if (statusFilter && statusFilter !== 'all') {
+          query = query.eq('status', statusFilter);
+        }
+
+        const { data, error, count } = await query.range(from, to);
+
+        if (error) throw error;
+        setPagedItems((data || []).map(mapRowToItem));
+        setPagedTotalCount(count || 0);
+      } catch (error: any) {
+        logger.error('Error fetching inventory page:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to fetch inventory',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsPageLoading(false);
+      }
+    },
+    [toast]
+  );
 
   const mapRowToMovement = (m: any): StockMovement => ({
     id: m.id,
@@ -190,7 +256,7 @@ export function useInventory() {
       if (error) throw error;
       setMovements((data || []).map(mapRowToMovement));
     } catch (error: any) {
-      console.error('Error fetching stock movements:', error);
+      logger.error('Error fetching stock movements:', error);
     }
   }, []);
 
@@ -239,7 +305,7 @@ export function useInventory() {
       setItems((prev) => [mapRowToItem(data), ...prev]);
       return { success: true, data };
     } catch (error: any) {
-      console.error('Error creating item:', error);
+      logger.error('Error creating item:', error);
       return { success: false, error: error.message };
     }
   };
@@ -270,7 +336,7 @@ export function useInventory() {
       setItems((prev) => prev.map((it) => (it.id === id ? mapRowToItem(data) : it)));
       return { success: true };
     } catch (error: any) {
-      console.error('Error updating item:', error);
+      logger.error('Error updating item:', error);
       if (error?.code === '23505') {
         return { success: false, error: 'Duplicate value detected (likely item code). Please choose a different Item Code.' };
       }
@@ -353,7 +419,7 @@ export function useInventory() {
       }
       return { success: true };
     } catch (error: any) {
-      console.error('Error recording movement:', error);
+      logger.error('Error recording movement:', error);
       return { success: false, error: error.message };
     }
   };
@@ -408,7 +474,7 @@ export function useInventory() {
       );
       return { success: true, data };
     } catch (error: any) {
-      console.error('Error creating category:', error);
+      logger.error('Error creating category:', error);
       
       // Handle duplicate key error specifically
       if (error.code === '23505') {
@@ -431,7 +497,7 @@ export function useInventory() {
       setItems((prev) => prev.filter((item) => item.id !== id));
       return { success: true };
     } catch (error: any) {
-      console.error('Error deleting item:', error);
+      logger.error('Error deleting item:', error);
       toast({
         title: 'Error',
         description: 'Failed to delete item',
@@ -477,7 +543,7 @@ export function useInventory() {
       
       return { success: true, data };
     } catch (error: any) {
-      console.error('Error updating category:', error);
+      logger.error('Error updating category:', error);
       
       // Handle duplicate key error specifically
       if (error.code === '23505') {
@@ -511,7 +577,7 @@ export function useInventory() {
       setCategories((prev) => prev.filter((cat) => cat.id !== id));
       return { success: true };
     } catch (error: any) {
-      console.error('Error deleting category:', error);
+      logger.error('Error deleting category:', error);
       toast({
         title: 'Error',
         description: 'Failed to delete category',
@@ -542,5 +608,10 @@ export function useInventory() {
     updateCategory,
     deleteItem,
     deleteCategory,
+    // Server-side pagination
+    pagedItems,
+    pagedTotalCount,
+    isPageLoading,
+    fetchItemsPage,
   };
 }

@@ -28,7 +28,7 @@ interface NavItem {
 
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Patients', href: '/patients', icon: Users },
+  { name: 'Customers', href: '/patients', icon: Users },
   { name: 'Inventory', href: '/inventory', icon: Package, allowedRoles: ['admin'] },
   { name: 'Reports', href: '/reports', icon: BarChart3, allowedRoles: ['admin', 'dentist'] },
 ];

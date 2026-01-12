@@ -1,12 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 import { Invoice, InvoiceItem, InvoiceStatus, Patient, PaymentMethod } from '@/types';
 import { useToast } from '@/hooks';
 
-export function useInvoices() {
+type InvoiceSummary = { balance: number; lastVisit: string | null };
+
+type UseInvoicesOptions = {
+  autoFetch?: boolean;
+};
+
+export function useInvoices(options?: UseInvoicesOptions) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const autoFetch = options?.autoFetch ?? true;
 
   const mapRowToInvoice = (inv: any): Invoice => ({
     id: inv.id,
@@ -64,7 +72,7 @@ export function useInvoices() {
 
       setInvoices((data || []).map(mapRowToInvoice));
     } catch (error: any) {
-      console.error('Error fetching invoices:', error);
+      logger.error('Error fetching invoices:', error);
       toast({
         title: 'Error',
         description: 'Failed to fetch invoices',
@@ -74,6 +82,63 @@ export function useInvoices() {
       setIsLoading(false);
     }
   }, [toast]);
+
+  const fetchInvoiceSummariesByPatientIds = useCallback(async (patientIds: string[]) => {
+    try {
+      const ids = (patientIds || []).filter(Boolean);
+      if (ids.length === 0) return { success: true, data: {} as Record<string, InvoiceSummary> };
+
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('id, patient_id, balance, invoice_date, created_at')
+        .in('patient_id', ids)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const summary: Record<string, InvoiceSummary> = {};
+      for (const inv of data || []) {
+        const patientId = (inv as any).patient_id as string | undefined;
+        if (!patientId) continue;
+
+        const current = summary[patientId] || { balance: 0, lastVisit: null };
+        current.balance += Number((inv as any).balance || 0);
+
+        const visitDate = (inv as any).invoice_date || ((inv as any).created_at ? String((inv as any).created_at).split('T')[0] : null);
+        if (visitDate && (!current.lastVisit || String(visitDate) > current.lastVisit)) {
+          current.lastVisit = String(visitDate);
+        }
+
+        summary[patientId] = current;
+      }
+
+      return { success: true, data: summary };
+    } catch (error: any) {
+      logger.error('Error fetching invoice summaries:', error);
+      return { success: false, error: error.message };
+    }
+  }, []);
+
+  const fetchInvoicesForPatient = useCallback(async (patientId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select(`
+          *,
+          patient:patients(*),
+          items:invoice_items(*)
+        `)
+        .eq('patient_id', patientId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      return { success: true, data: (data || []).map(mapRowToInvoice) as Invoice[] };
+    } catch (error: any) {
+      logger.error('Error fetching invoices for patient:', error);
+      return { success: false, error: error.message };
+    }
+  }, []);
 
   const createInvoice = async (invoiceData: {
     patient_id: string;
@@ -141,7 +206,7 @@ export function useInvoices() {
       setInvoices((prev) => [mapRowToInvoice(invoiceWithJoins), ...prev]);
       return { success: true, data: invoiceWithJoins };
     } catch (error: any) {
-      console.error('Error creating invoice:', error);
+      logger.error('Error creating invoice:', error);
       return { success: false, error: error.message };
     }
   };
@@ -153,8 +218,54 @@ export function useInvoices() {
     notes?: string;
   }) => {
     try {
-      const invoice = invoices.find(i => i.id === invoiceId);
-      if (!invoice) throw new Error('Invoice not found');
+      const invoice = invoices.find((i) => i.id === invoiceId);
+
+      let invoiceRow: {
+        id: string;
+        patient_id: string;
+        subtotal: number;
+        discount_amount: number;
+        tax_amount: number;
+        total_amount: number;
+        amount_paid: number;
+        balance: number;
+        status: InvoiceStatus;
+      } | null = null;
+
+      if (invoice) {
+        invoiceRow = {
+          id: invoice.id,
+          patient_id: invoice.patient_id,
+          subtotal: invoice.subtotal,
+          discount_amount: invoice.discount_amount,
+          tax_amount: invoice.tax_amount,
+          total_amount: invoice.total_amount,
+          amount_paid: invoice.amount_paid,
+          balance: invoice.balance,
+          status: invoice.status,
+        };
+      } else {
+        const { data, error } = await supabase
+          .from('invoices')
+          .select('id, patient_id, subtotal, discount_amount, tax_amount, total_amount, amount_paid, balance, status')
+          .eq('id', invoiceId)
+          .single();
+
+        if (error) throw error;
+        if (!data) throw new Error('Invoice not found');
+
+        invoiceRow = {
+          id: (data as any).id,
+          patient_id: (data as any).patient_id,
+          subtotal: Number((data as any).subtotal || 0),
+          discount_amount: Number((data as any).discount_amount || 0),
+          tax_amount: Number((data as any).tax_amount || 0),
+          total_amount: Number((data as any).total_amount || 0),
+          amount_paid: Number((data as any).amount_paid || 0),
+          balance: Number((data as any).balance || 0),
+          status: (data as any).status as InvoiceStatus,
+        };
+      }
 
       const paymentDate = new Date().toISOString().split('T')[0];
 
@@ -163,7 +274,7 @@ export function useInvoices() {
         .from('payments')
         .insert({
           invoice_id: invoiceId,
-          patient_id: invoice.patient_id,
+          patient_id: invoiceRow.patient_id,
           payment_date: paymentDate,
           amount: paymentData.amount,
           payment_method: paymentData.payment_method,
@@ -174,8 +285,8 @@ export function useInvoices() {
       if (paymentError) throw paymentError;
 
       // Update invoice
-      const newAmountPaid = invoice.amount_paid + paymentData.amount;
-      const newBalance = invoice.total_amount - newAmountPaid;
+      const newAmountPaid = invoiceRow.amount_paid + paymentData.amount;
+      const newBalance = invoiceRow.total_amount - newAmountPaid;
       const newStatus: InvoiceStatus = newBalance <= 0 ? 'paid' : 'partial';
 
       const { error: updateError } = await supabase
@@ -205,7 +316,7 @@ export function useInvoices() {
 
       return { success: true };
     } catch (error: any) {
-      console.error('Error recording payment:', error);
+      logger.error('Error recording payment:', error);
       return { success: false, error: error.message };
     }
   };
@@ -213,12 +324,43 @@ export function useInvoices() {
   const updateInvoiceDiscount = async (invoiceId: string, discountAmount: number) => {
     try {
       const invoice = invoices.find((i) => i.id === invoiceId);
-      if (!invoice) throw new Error('Invoice not found');
+
+      let invoiceRow: {
+        id: string;
+        subtotal: number;
+        tax_amount: number;
+        amount_paid: number;
+      } | null = null;
+
+      if (invoice) {
+        invoiceRow = {
+          id: invoice.id,
+          subtotal: invoice.subtotal,
+          tax_amount: invoice.tax_amount,
+          amount_paid: invoice.amount_paid,
+        };
+      } else {
+        const { data, error } = await supabase
+          .from('invoices')
+          .select('id, subtotal, tax_amount, amount_paid')
+          .eq('id', invoiceId)
+          .single();
+
+        if (error) throw error;
+        if (!data) throw new Error('Invoice not found');
+
+        invoiceRow = {
+          id: (data as any).id,
+          subtotal: Number((data as any).subtotal || 0),
+          tax_amount: Number((data as any).tax_amount || 0),
+          amount_paid: Number((data as any).amount_paid || 0),
+        };
+      }
 
       const safeDiscount = Math.max(0, Number.isFinite(discountAmount) ? discountAmount : 0);
-      const total_amount = invoice.subtotal - safeDiscount + (invoice.tax_amount || 0);
-      const balance = Math.max(0, total_amount - (invoice.amount_paid || 0));
-      const status: InvoiceStatus = balance <= 0 ? 'paid' : invoice.amount_paid > 0 ? 'partial' : 'unpaid';
+      const total_amount = invoiceRow.subtotal - safeDiscount + (invoiceRow.tax_amount || 0);
+      const balance = Math.max(0, total_amount - (invoiceRow.amount_paid || 0));
+      const status: InvoiceStatus = balance <= 0 ? 'paid' : invoiceRow.amount_paid > 0 ? 'partial' : 'unpaid';
 
       const { error } = await supabase
         .from('invoices')
@@ -248,7 +390,7 @@ export function useInvoices() {
 
       return { success: true };
     } catch (error: any) {
-      console.error('Error updating invoice discount:', error);
+      logger.error('Error updating invoice discount:', error);
       return { success: false, error: error.message };
     }
   };
@@ -265,7 +407,7 @@ export function useInvoices() {
       setInvoices((prev) => prev.filter((inv) => inv.id !== id));
       return { success: true };
     } catch (error: any) {
-      console.error('Error deleting invoice:', error);
+      logger.error('Error deleting invoice:', error);
       toast({
         title: 'Error',
         description: 'Failed to delete invoice',
@@ -276,13 +418,16 @@ export function useInvoices() {
   };
 
   useEffect(() => {
+    if (!autoFetch) return;
     fetchInvoices();
-  }, [fetchInvoices]);
+  }, [autoFetch, fetchInvoices]);
 
   return {
     invoices,
     isLoading,
     fetchInvoices,
+    fetchInvoiceSummariesByPatientIds,
+    fetchInvoicesForPatient,
     createInvoice,
     recordPayment,
     updateInvoiceDiscount,

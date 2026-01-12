@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { logger } from '@/lib/logger';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -196,7 +197,7 @@ export default function Reports() {
         const breakdown = Array.from(map.values()).sort((a, b) => b.amount - a.amount);
         setPaymentBreakdown(breakdown);
       } catch (error) {
-        console.error('Error fetching payment breakdown:', error);
+        logger.error('Error fetching payment breakdown:', error);
       } finally {
         setIsLoadingPayments(false);
       }
