@@ -223,8 +223,45 @@ export default function Login() {
         if (reqError) {
           const msg = String(reqError.message || 'Request failed');
           const lower = msg.toLowerCase();
+          const isDuplicate = lower.includes('already have a clinic request');
           const isPending = lower.includes('already have a pending request');
           const isRateLimited = lower.includes('too many rejected requests');
+
+          if (isDuplicate) {
+            // Check the user's current request status
+            const { data: existingRequest } = await supabase
+              .from('clinic_requests')
+              .select('status')
+              .eq('auth_user_id', authUserId)
+              .single();
+
+            if (existingRequest) {
+              if (existingRequest.status === 'approved') {
+                toast({
+                  title: 'Already approved',
+                  description: 'Your clinic has already been approved. Please sign in to access your dashboard.',
+                });
+              } else if (existingRequest.status === 'pending') {
+                toast({
+                  title: 'Request pending',
+                  description: 'Your clinic request is still pending approval. Please check your email or wait for admin approval.',
+                });
+              } else if (existingRequest.status === 'rejected') {
+                toast({
+                  title: 'Request rejected',
+                  description: 'Your clinic request was rejected. Please contact support for assistance.',
+                });
+              }
+            } else {
+              toast({
+                title: 'Account exists',
+                description: 'You already have an account. Please sign in.',
+              });
+            }
+            setIsSignUp(false);
+            resetAuthForm();
+            return;
+          }
 
           toast({
             title: 'Account created, but request failed',

@@ -67,6 +67,11 @@ create unique index if not exists clinic_requests_one_pending_per_auth_user
 on public.clinic_requests (auth_user_id)
 where auth_user_id is not null and status = 'pending';
 
+-- Prevent duplicate requests entirely - one auth_user_id can only have one request
+create unique index if not exists clinic_requests_unique_auth_user_id
+on public.clinic_requests (auth_user_id)
+where auth_user_id is not null;
+
 create or replace function public.enforce_clinic_request_limits()
 returns trigger
 language plpgsql
@@ -92,19 +97,8 @@ begin
     select 1
     from public.clinic_requests
     where auth_user_id = new.auth_user_id
-      and status = 'pending'
   ) then
-    raise exception 'You already have a pending request.' using errcode = 'P0001';
-  end if;
-
-  select count(*)
-  into rejected_count
-  from public.clinic_requests
-  where auth_user_id = new.auth_user_id
-    and status = 'rejected';
-
-  if rejected_count >= 3 then
-    raise exception 'Too many rejected requests. Please use a different email or contact support.' using errcode = 'P0001';
+    raise exception 'You already have a clinic request. Please sign in to check your status.' using errcode = 'P0001';
   end if;
 
   return new;

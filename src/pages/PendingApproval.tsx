@@ -134,28 +134,51 @@ export default function PendingApproval() {
     if (isResending) return;
     setIsResending(true);
 
-    const redirectUrl = `${window.location.origin}/`;
-    const { error: resendError } = await supabase.auth.resend({
-      type: 'signup',
-      email,
-      options: { emailRedirectTo: redirectUrl },
-    });
+    try {
+      // Try multiple approaches to resend verification
+      const redirectUrl = `${window.location.origin}/`;
+      
+      // Method 1: Standard resend
+      let { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: { emailRedirectTo: redirectUrl },
+      });
 
-    if (resendError) {
+      // If method 1 fails, try method 2: email change to same email (triggers verification)
+      if (resendError) {
+        const { error: changeError } = await supabase.auth.updateUser({
+          email: email,
+        });
+
+        if (!changeError) {
+          resendError = null;
+        }
+      }
+
+      if (resendError) {
+        toast({
+          title: 'Resend failed',
+          description: `${resendError.message}. Please check your Supabase email configuration or contact support.`,
+          variant: 'destructive',
+        });
+        setIsResending(false);
+        return;
+      }
+
+      toast({
+        title: 'Verification email sent',
+        description: 'Please check your inbox and spam/junk folder. If you still don\'t see it, the email service may be misconfigured.',
+      });
+    } catch (error: any) {
       toast({
         title: 'Resend failed',
-        description: resendError.message,
+        description: error.message || 'An unexpected error occurred',
         variant: 'destructive',
       });
+    } finally {
       setIsResending(false);
-      return;
     }
-
-    toast({
-      title: 'Verification email sent',
-      description: 'Please check your inbox (and spam/junk).',
-    });
-    setIsResending(false);
   };
 
   const handleReapply = async () => {
