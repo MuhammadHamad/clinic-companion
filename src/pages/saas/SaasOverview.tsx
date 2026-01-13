@@ -32,7 +32,10 @@ export default function SaasOverview() {
 
       const [clinicsRes, usersRes, revenueRes] = await Promise.all([
         supabase.from('clinics').select('*', { count: 'exact', head: true }),
-        supabase.from('user_roles').select('*', { count: 'exact', head: true }),
+        supabase
+          .from('user_roles')
+          .select('user_id', { count: 'exact', head: true })
+          .not('clinic_id', 'is', null),
         supabase.from('payments').select('amount').gte('payment_date', monthStart),
       ]);
 

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -7,7 +8,12 @@ import {
   Shield,
   Inbox,
   Settings,
+  Menu,
+  X,
+  Moon,
+  Sun,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -21,7 +27,6 @@ const navigation: NavItem[] = [
   { name: 'Requests', href: '/saas/requests', icon: Inbox },
   { name: 'Clinics', href: '/saas/clinics', icon: Building2 },
   { name: 'Users', href: '/saas/users', icon: Users },
-  { name: 'Settings', href: '/saas/settings', icon: Settings },
 ];
 
 interface SaasSidebarProps {
@@ -31,9 +36,68 @@ interface SaasSidebarProps {
 
 export function SaasSidebar({ onLogout, user }: SaasSidebarProps) {
   const location = useLocation();
+  const [isOpen, setIsOpen] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => document.documentElement.classList.contains('dark'));
+
+  const openSidebar = () => {
+    setIsOpen(true);
+    document.body.style.overflow = 'hidden';
+    document.body.classList.add('scroll-locked');
+  };
+
+  const closeSidebar = () => {
+    setIsOpen(false);
+    document.body.style.overflow = '';
+    document.body.classList.remove('scroll-locked');
+  };
+
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = '';
+      document.body.classList.remove('scroll-locked');
+    };
+  }, []);
+
+  const setDarkMode = (enabled: boolean) => {
+    setIsDarkMode(enabled);
+    document.documentElement.classList.toggle('dark', enabled);
+    localStorage.setItem('color-mode', enabled ? 'dark' : 'light');
+  };
+
+  const ThemeToggle3D = ({ className }: { className?: string }) => {
+    return (
+      <button
+        type="button"
+        aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+        aria-pressed={isDarkMode}
+        onClick={() => setDarkMode(!isDarkMode)}
+        className={cn('theme-toggle-3d', isDarkMode && 'is-dark', className)}
+      >
+        <span className="theme-toggle-3d__surface" aria-hidden="true">
+          <span className="theme-toggle-3d__icon" aria-hidden="true">
+            {isDarkMode ? (
+              <Moon className="h-5 w-5" />
+            ) : (
+              <Sun className="h-5 w-5" />
+            )}
+          </span>
+        </span>
+      </button>
+    );
+  };
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar border-r border-sidebar-border">
+    <>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="sidebar-mobile-only fixed top-4 left-4 z-50 h-10 w-10 bg-background border border-border shadow-lg"
+        onClick={openSidebar}
+      >
+        <Menu className="h-5 w-5" />
+      </Button>
+
+      <aside className="sidebar-desktop-only fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar border-r border-sidebar-border">
       <div className="flex h-full flex-col">
         <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
@@ -81,17 +145,150 @@ export function SaasSidebar({ onLogout, user }: SaasSidebarProps) {
             </div>
           </div>
 
-          <button
-            onClick={onLogout}
-            className={cn(
-              'w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-sidebar-muted hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors'
-            )}
-          >
-            <LogOut className="h-4 w-4" />
-            <span>Logout</span>
-          </button>
+          <div className="mb-3 flex items-center justify-center">
+            <ThemeToggle3D />
+          </div>
+
+          <div className="flex gap-2">
+            <Link
+              to="/saas/settings"
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors"
+            >
+              <Settings className="h-4 w-4" />
+              <span className="hidden sm:inline">Settings</span>
+            </Link>
+
+            <button
+              onClick={onLogout}
+              className={cn(
+                'flex items-center justify-center px-3 py-2 text-sm text-sidebar-muted hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors'
+              )}
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
     </aside>
+
+    <div
+      className={cn(
+        'sidebar-mobile-only fixed inset-0 z-40',
+        isOpen ? 'pointer-events-auto' : 'pointer-events-none'
+      )}
+      aria-hidden={!isOpen}
+    >
+      <div
+        className={cn(
+          'absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300',
+          isOpen ? 'opacity-100' : 'opacity-0'
+        )}
+        onClick={isOpen ? closeSidebar : undefined}
+      />
+
+      <div
+        className={cn(
+          'absolute left-0 top-0 bottom-0 w-64 bg-sidebar border-r border-sidebar-border transition-transform duration-300',
+          isOpen ? 'translate-x-0' : '-translate-x-full'
+        )}
+      >
+        <div className="flex h-full flex-col">
+          <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
+                <Shield className="h-5 w-5 text-primary-foreground" />
+              </div>
+              <div>
+                <h1 className="text-lg font-display font-bold text-sidebar-foreground">Clinic Companion</h1>
+                <p className="text-xs text-sidebar-muted">Super Admin</p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={closeSidebar}
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+
+          <nav className="flex-1 space-y-1 px-3 py-4">
+            {navigation.map((item) => {
+              const isActive = location.pathname === item.href ||
+                (item.href !== '/saas' && location.pathname.startsWith(item.href));
+
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  onClick={closeSidebar}
+                  className={cn(
+                    'sidebar-item',
+                    isActive && 'sidebar-item-active'
+                  )}
+                >
+                  <item.icon className="h-5 w-5" />
+                  <span>{item.name}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="border-t border-sidebar-border p-4">
+            <div className="rounded-xl border border-border bg-card/40 backdrop-blur-sm p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-foreground font-medium">
+                  {user?.first_name?.[0] || 'S'}{user?.last_name?.[0] || 'A'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground truncate">
+                    {user?.first_name || 'Super'} {user?.last_name || 'Admin'}
+                  </p>
+                  <p className="text-xs text-muted-foreground capitalize">
+                    {user?.role || 'super_admin'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-center justify-center">
+                <ThemeToggle3D />
+              </div>
+
+              <div className="mt-4 space-y-2">
+                <Link
+                  to="/saas/settings"
+                  onClick={closeSidebar}
+                  className="flex items-center gap-3 w-full px-3 py-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground rounded-lg transition-colors"
+                >
+                  <Settings className="h-4 w-4" />
+                  <span>Settings</span>
+                </Link>
+                <button
+                  onClick={() => {
+                    onLogout();
+                    closeSidebar();
+                  }}
+                  className="flex items-center gap-3 w-full px-3 py-3 text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive rounded-lg transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Logout</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <style>{`
+      @media (max-width: 1023px) {
+        .sidebar-desktop-only { display: none; }
+      }
+      @media (min-width: 1024px) {
+        .sidebar-mobile-only { display: none; }
+      }
+    `}</style>
+  </>
   );
 }

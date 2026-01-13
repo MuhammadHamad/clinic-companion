@@ -147,11 +147,26 @@ export default function PendingApproval() {
     });
 
     if (insertError) {
+      const msg = String(insertError.message || 'Failed to submit a new request');
+      const lower = msg.toLowerCase();
+      const isPending = lower.includes('already have a pending request');
+      const isRateLimited = lower.includes('too many rejected requests');
+
       setRequestLoading(false);
-      setRequestError(insertError.message || 'Failed to submit a new request');
+      setRequestError(
+        isPending
+          ? 'You already have a pending request. Please wait for approval.'
+          : isRateLimited
+            ? 'Your request was rejected too many times. Please use a different email or contact support.'
+            : msg,
+      );
       toast({
         title: 'Re-apply failed',
-        description: insertError.message,
+        description: isPending
+          ? 'You already have a pending request. Please wait for approval.'
+          : isRateLimited
+            ? 'Your request was rejected too many times. Please use a different email or contact support.'
+            : msg,
         variant: 'destructive',
       });
       return;

@@ -83,11 +83,16 @@ export default function SaasClinics() {
     });
 
     if (error) {
-      toast({
-        title: 'Failed to load clinic stats',
-        description: error.message,
-        variant: 'destructive',
-      });
+      if (error.message.includes('Could not find the function')) {
+        console.warn('RPC get_clinic_stats not found - please apply database-migrations/clinic_stats_rpc.sql');
+        setClinicStats({});
+      } else {
+        toast({
+          title: 'Failed to load clinic stats',
+          description: error.message,
+          variant: 'destructive',
+        });
+      }
       setIsLoadingStats(false);
       return;
     }
@@ -173,10 +178,9 @@ export default function SaasClinics() {
 
     setIsDeleting(true);
 
-    const { error } = await supabase
-      .from('clinics')
-      .delete()
-      .eq('id', clinicToDelete.id);
+    const { data, error } = await supabase.rpc('delete_clinic_cascade', {
+      target_clinic_id: clinicToDelete.id,
+    });
 
     if (error) {
       toast({
@@ -188,9 +192,12 @@ export default function SaasClinics() {
       return;
     }
 
+    const summary = data as Record<string, number>;
+    const totalRecords = Object.values(summary).reduce((sum, count) => sum + count, 0);
+
     toast({
       title: 'Clinic deleted',
-      description: `${clinicToDelete.name} has been permanently deleted`,
+      description: `${clinicToDelete.name} and ${totalRecords} related records have been permanently deleted`,
     });
 
     if (activeClinicId === clinicToDelete.id) {

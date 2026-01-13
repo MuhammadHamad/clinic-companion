@@ -221,9 +221,18 @@ export default function Login() {
         });
 
         if (reqError) {
+          const msg = String(reqError.message || 'Request failed');
+          const lower = msg.toLowerCase();
+          const isPending = lower.includes('already have a pending request');
+          const isRateLimited = lower.includes('too many rejected requests');
+
           toast({
             title: 'Account created, but request failed',
-            description: reqError.message,
+            description: isPending
+              ? 'You already have a pending request. Please wait for approval or use the Pending Approval screen to refresh.'
+              : isRateLimited
+                ? 'Your request was rejected too many times. Please use a different email or contact support.'
+                : msg,
             variant: 'destructive',
           });
           return;

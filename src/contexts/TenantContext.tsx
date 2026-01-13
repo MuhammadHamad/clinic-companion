@@ -154,7 +154,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase
       .from('user_roles')
       .select('role, clinic_id')
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .single();
 
     if (error) {
       logger.error('[Tenant] user_roles query error', error);
@@ -169,12 +170,11 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       return null;
     }
 
-    const rows = (data || []) as Array<{ role: AppRole; clinic_id: string | null }>;
-    logger.debug('[Tenant] user_roles rows', rows);
-    const preferredRow = rows.find((r) => r.role === 'super_admin') || rows[0] || null;
+    const row = (data || null) as { role: AppRole; clinic_id: string | null } | null;
+    logger.debug('[Tenant] user_roles row', row);
 
-    const nextRole = preferredRow?.role || null;
-    const nextClinicId = preferredRow?.clinic_id || null;
+    const nextRole = row?.role || null;
+    const nextClinicId = row?.clinic_id || null;
 
     setRole(nextRole);
     setClinicId(nextClinicId);
@@ -232,6 +232,15 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       .single();
 
     if (error) {
+      if ((error as unknown as { code?: string }).code === 'PGRST116') {
+        setActiveClinicIdState(null);
+        setActiveClinic(null);
+        try {
+          localStorage.removeItem(ACTIVE_CLINIC_STORAGE_KEY);
+        } catch {
+          // ignore
+        }
+      }
       // If RLS blocks reading clinics but updates are allowed, we still want to
       // keep the last known clinic name (optimistic UI) instead of reverting.
       return;

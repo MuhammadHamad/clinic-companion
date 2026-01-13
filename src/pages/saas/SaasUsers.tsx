@@ -68,7 +68,8 @@ export default function SaasUsers() {
       setRows([]);
       setSetupWarning('User roles are not accessible yet (RLS policy likely restricts reading user_roles).');
     } else {
-      setRows((rolesRes.data || []) as UserRoleRow[]);
+      const next = (rolesRes.data || []) as UserRoleRow[];
+      setRows(next.filter((r) => r.role === 'super_admin' || Boolean(r.clinic_id)));
     }
 
     if (profilesRes.error) {
@@ -193,11 +194,14 @@ export default function SaasUsers() {
     }
 
     // 2) Insert user_roles row linking that user to clinic and role
-    const { error: roleError } = await supabase.from('user_roles').insert({
-      user_id: profile.id,
-      role: addForm.role,
-      clinic_id: addForm.clinicId,
-    });
+    const { error: roleError } = await supabase.from('user_roles').upsert(
+      {
+        user_id: profile.id,
+        role: addForm.role,
+        clinic_id: addForm.clinicId,
+      },
+      { onConflict: 'user_id' },
+    );
 
     if (roleError) {
       toast({

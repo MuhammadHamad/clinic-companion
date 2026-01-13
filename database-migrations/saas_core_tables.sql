@@ -71,11 +71,12 @@ create policy "clinics_select_own"
   for select
   to authenticated
   using (
-    id = (
-      select ur.clinic_id
+    exists (
+      select 1
       from public.user_roles ur
       where ur.user_id = auth.uid()
-      limit 1
+        and ur.role <> 'super_admin'
+        and ur.clinic_id = public.clinics.id
     )
   );
 
