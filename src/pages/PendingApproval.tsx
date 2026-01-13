@@ -16,6 +16,7 @@ export default function PendingApproval() {
   const [requestLoading, setRequestLoading] = useState(false);
   const [hasLoadedRequest, setHasLoadedRequest] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
+  const [isResending, setIsResending] = useState(false);
   const [latestRequest, setLatestRequest] = useState<{
     status: 'pending' | 'approved' | 'rejected' | string;
     clinic_name: string | null;
@@ -117,6 +118,44 @@ export default function PendingApproval() {
   const handleLogout = async () => {
     await logout();
     navigate('/login', { replace: true });
+  };
+
+  const handleResendVerification = async () => {
+    const email = user?.email;
+    if (!email) {
+      toast({
+        title: 'Email not available',
+        description: 'Please log out and sign in again, then try resending the verification email.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (isResending) return;
+    setIsResending(true);
+
+    const redirectUrl = `${window.location.origin}/`;
+    const { error: resendError } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: { emailRedirectTo: redirectUrl },
+    });
+
+    if (resendError) {
+      toast({
+        title: 'Resend failed',
+        description: resendError.message,
+        variant: 'destructive',
+      });
+      setIsResending(false);
+      return;
+    }
+
+    toast({
+      title: 'Verification email sent',
+      description: 'Please check your inbox (and spam/junk).',
+    });
+    setIsResending(false);
   };
 
   const handleReapply = async () => {
@@ -249,6 +288,9 @@ export default function PendingApproval() {
                 Refresh
               </Button>
             )}
+            <Button variant="outline" onClick={handleResendVerification} disabled={isResending}>
+              {isResending ? 'Sending…' : 'Resend email'}
+            </Button>
             <Button variant="destructive" onClick={handleLogout}>
               Logout
             </Button>
