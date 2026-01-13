@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading } = useAuth();
-  const { role, isLoading: isTenantLoading, hasLoadedRole, error } = useTenant();
+  const { role, clinicId, isLoading: isTenantLoading, hasLoadedRole, error } = useTenant();
   const location = useLocation();
 
   if (isLoading || (isAuthenticated && (isTenantLoading || !hasLoadedRole))) {
@@ -57,8 +57,12 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  // Only redirect to pending approval if we have no role AND we're not already there
-  if (!role && location.pathname !== '/pending-approval') {
+  // Only redirect to pending approval if:
+  // 1. User has no role at all
+  // 2. User is NOT a super_admin AND has no clinic_id (orphaned user)
+  const isOrphan = role && role !== 'super_admin' && !clinicId;
+  
+  if ((!role || isOrphan) && location.pathname !== '/pending-approval') {
     return <Navigate to="/pending-approval" state={{ from: location }} replace />;
   }
 

@@ -196,6 +196,8 @@ export default function SaasClinicRequests() {
       });
 
       if (roleError) {
+        // Rollback: delete the clinic we just created since user linking failed
+        await supabase.from('clinics').delete().eq('id', clinicRow.id);
         toast({
           title: 'Failed to link user',
           description: roleError.message,
@@ -235,13 +237,29 @@ export default function SaasClinicRequests() {
 
     setIsWorking(true);
     try {
-      const base = supabase.from('clinic_requests').update({ status: 'rejected' });
-
       const authUserId = rejecting.auth_user_id;
       const userEmail = rejecting.user_email;
 
-      // Reject the selected request AND any other pending requests for the same user.
+      // 1. Delete any existing user_roles row for this user to ensure they can't log in
+      if (authUserId) {
+        const { error: deleteRoleError } = await supabase
+          .from('user_roles')
+          .delete()
+          .eq('user_id', authUserId);
+
+        if (deleteRoleError) {
+          toast({
+            title: 'Failed to clean up user role',
+            description: deleteRoleError.message,
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+
+      // 2. Reject the selected request AND any other pending requests for the same user.
       // This prevents a rejected user from still having another "pending" row that makes the app show "Approval Pending".
+      const base = supabase.from('clinic_requests').update({ status: 'rejected' });
       const { error } = await (authUserId
         ? base.or(`id.eq.${rejecting.id},auth_user_id.eq.${authUserId}`).eq('status', 'pending')
         : userEmail
@@ -259,7 +277,7 @@ export default function SaasClinicRequests() {
 
       toast({
         title: 'Rejected',
-        description: 'Clinic request rejected.',
+        description: 'Clinic request rejected and user access revoked.',
       });
 
       setIsRejectOpen(false);

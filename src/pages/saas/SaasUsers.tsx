@@ -69,7 +69,7 @@ export default function SaasUsers() {
       setSetupWarning('User roles are not accessible yet (RLS policy likely restricts reading user_roles).');
     } else {
       const next = (rolesRes.data || []) as UserRoleRow[];
-      setRows(next.filter((r) => r.role === 'super_admin' || Boolean(r.clinic_id)));
+      setRows(next);
     }
 
     if (profilesRes.error) {
@@ -163,6 +163,33 @@ export default function SaasUsers() {
     });
 
     setRows((prev) => prev.map((r) => (r.user_id === userId ? { ...r, clinic_id: nextClinicId } : r)));
+  };
+
+  const deleteUserRole = async (userId: string) => {
+    if (!confirm('Are you sure you want to revoke this user\'s access? This will remove their role and clinic assignment.')) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from('user_roles')
+      .delete()
+      .eq('user_id', userId);
+
+    if (error) {
+      toast({
+        title: 'Failed to delete role',
+        description: error.message,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    toast({
+      title: 'Access revoked',
+      description: 'User role has been deleted.',
+    });
+
+    setRows((prev) => prev.filter((r) => r.user_id !== userId));
   };
 
   const createUser = async () => {
@@ -398,20 +425,31 @@ export default function SaasUsers() {
                         {u.created_at ? new Date(u.created_at).toLocaleString() : '—'}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Select
-                          value={u.role}
-                          onValueChange={(v) => updateRole(u.user_id, v as AppRole)}
-                        >
-                          <SelectTrigger className="inline-flex w-44">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="admin">Admin</SelectItem>
-                            <SelectItem value="dentist">Dentist</SelectItem>
-                            <SelectItem value="receptionist">Receptionist</SelectItem>
-                            <SelectItem value="super_admin">Super Admin</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <div className="flex justify-end items-center gap-2">
+                          <Select
+                            value={u.role}
+                            onValueChange={(v) => updateRole(u.user_id, v as AppRole)}
+                          >
+                            <SelectTrigger className="inline-flex w-36">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="admin">Admin</SelectItem>
+                              <SelectItem value="dentist">Dentist</SelectItem>
+                              <SelectItem value="receptionist">Receptionist</SelectItem>
+                              <SelectItem value="super_admin">Super Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => deleteUserRole(u.user_id)}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
