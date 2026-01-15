@@ -1,4 +1,4 @@
-# Clinic Companion
+# Endicode Clinic
 
 A modern clinic management system built with React, TypeScript, and Supabase.
 

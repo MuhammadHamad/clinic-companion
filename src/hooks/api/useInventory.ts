@@ -67,11 +67,11 @@ export function useInventory() {
     
     /* Original seeding code disabled for now
     const defaultCategories = [
-      { name: 'Instruments', description: 'Dental instruments and tools' },
-      { name: 'Materials', description: 'Dental materials and supplies' },
+      { name: 'Instruments', description: 'Clinic instruments and tools' },
+      { name: 'Materials', description: 'Clinic materials and supplies' },
       { name: 'Consumables', description: 'Single-use consumable items' },
       { name: 'Medications', description: 'Pharmaceutical products and medications' },
-      { name: 'Equipment', description: 'Dental equipment and devices' },
+      { name: 'Equipment', description: 'Clinic equipment and devices' },
     ];
 
     try {

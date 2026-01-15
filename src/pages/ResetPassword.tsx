@@ -203,7 +203,7 @@ export default function ResetPassword() {
             <Stethoscope className="h-7 w-7 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-display font-bold">DentalCare</h1>
+            <h1 className="text-2xl font-display font-bold">Endicode Clinic</h1>
             <p className="text-sm text-muted-foreground">Clinic Management</p>
           </div>
         </div>

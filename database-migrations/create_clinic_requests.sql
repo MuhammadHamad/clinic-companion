@@ -63,20 +63,24 @@ create policy "clinic_requests_update_super_admin"
   using (public.is_super_admin())
   with check (public.is_super_admin());
 
+drop index if exists public.clinic_requests_unique_auth_user_id;
+
+drop index if exists public.clinic_requests_one_pending_per_auth_user;
 create unique index if not exists clinic_requests_one_pending_per_auth_user
 on public.clinic_requests (auth_user_id)
 where auth_user_id is not null and status = 'pending';
 
--- Prevent duplicate requests entirely - one auth_user_id can only have one request
-create unique index if not exists clinic_requests_unique_auth_user_id
-on public.clinic_requests (auth_user_id)
-where auth_user_id is not null;
+drop index if exists public.clinic_requests_one_pending_per_user_email;
+create unique index if not exists clinic_requests_one_pending_per_user_email
+on public.clinic_requests ((lower(user_email)))
+where user_email is not null and status = 'pending';
 
 create or replace function public.enforce_clinic_request_limits()
 returns trigger
 language plpgsql
 security definer
 set search_path = public
+set row_security = off
 as $$
 declare
   rejected_count int;
@@ -93,12 +97,53 @@ begin
     raise exception 'auth_user_id is required' using errcode = 'P0001';
   end if;
 
+  -- If the user is already linked to a clinic, they should not be able to submit a new signup request.
+  if exists (
+    select 1
+    from public.user_roles ur
+    where ur.user_id = new.auth_user_id
+      and ur.role <> 'super_admin'
+      and ur.clinic_id is not null
+  ) then
+    raise exception 'You already have access to a clinic. Please sign in instead.' using errcode = 'P0001';
+  end if;
+
+  -- If an approved request exists (even if user_roles linking somehow failed), block new requests.
   if exists (
     select 1
     from public.clinic_requests
     where auth_user_id = new.auth_user_id
+      and status = 'approved'
   ) then
-    raise exception 'You already have a clinic request. Please sign in to check your status.' using errcode = 'P0001';
+    raise exception 'Your clinic has already been approved. Please sign in instead.' using errcode = 'P0001';
+  end if;
+
+  if exists (
+    select 1
+    from public.clinic_requests
+    where auth_user_id = new.auth_user_id
+      and status = 'pending'
+  ) then
+    raise exception 'You already have a pending request.' using errcode = 'P0001';
+  end if;
+
+  if new.user_email is not null and exists (
+    select 1
+    from public.clinic_requests
+    where lower(user_email) = lower(new.user_email)
+      and status = 'pending'
+  ) then
+    raise exception 'You already have a pending request.' using errcode = 'P0001';
+  end if;
+
+  select count(*)
+  into rejected_count
+  from public.clinic_requests
+  where auth_user_id = new.auth_user_id
+    and status = 'rejected';
+
+  if rejected_count >= 3 then
+    raise exception 'Too many rejected requests. Please use a different email or contact support.' using errcode = 'P0001';
   end if;
 
   return new;

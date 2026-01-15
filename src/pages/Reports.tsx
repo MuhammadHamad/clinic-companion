@@ -250,7 +250,7 @@ export default function Reports() {
   };
 
   const categoryBreakdown = [
-    { name: 'Dental Materials', value: 45000 },
+    { name: 'Clinic Supplies', value: 45000 },
     { name: 'Medicines', value: 12000 },
     { name: 'Consumables', value: 8000 },
     { name: 'Equipment', value: 25000 },
@@ -500,7 +500,7 @@ export default function Reports() {
 
             ${bodyHtml}
 
-            <div class="footer">Powered by Clinic Companion.</div>
+            <div class="footer">Powered by Endicode Clinic.</div>
           </div>
 
           <script>

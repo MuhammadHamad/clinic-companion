@@ -1,4 +1,4 @@
-# Clinic Companion - Deployment Guide
+# Endicode Clinic - Deployment Guide
 
 ## Environment Setup
 

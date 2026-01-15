@@ -1,4 +1,4 @@
-# Email Configuration Guide for Clinic Companion
+# Email Configuration Guide for Endicode Clinic
 
 ## Current Issue
 Users are not receiving verification emails after signup. This is likely due to Supabase Auth email configuration.

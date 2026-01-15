@@ -260,7 +260,7 @@ export default function SaasClinics() {
                   <div>
                     <label className="form-label">Slug</label>
                     <Input
-                      placeholder="e.g. smile-dental"
+                      placeholder="e.g. endicode-clinic"
                       value={form.slug}
                       onChange={(e) => setForm({ ...form, slug: e.target.value })}
                     />

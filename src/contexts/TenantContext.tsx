@@ -153,9 +153,10 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
     const { data, error } = await supabase
       .from('user_roles')
-      .select('role, clinic_id')
+      .select('role, clinic_id, created_at')
       .eq('user_id', user.id)
-      .single();
+      .order('created_at', { ascending: false })
+      .limit(1);
 
     if (error) {
       logger.error('[Tenant] user_roles query error', error);
@@ -170,7 +171,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       return null;
     }
 
-    const row = (data || null) as { role: AppRole; clinic_id: string | null } | null;
+    const row = ((data || []) as Array<{ role: AppRole; clinic_id: string | null }>)[0] || null;
     logger.debug('[Tenant] user_roles row', row);
 
     const nextRole = row?.role || null;

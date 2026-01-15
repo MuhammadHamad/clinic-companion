@@ -118,7 +118,7 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-base font-display font-semibold leading-tight tracking-tight text-foreground">
-              {activeClinic?.name || 'Clinic Companion'}
+              {activeClinic?.name || 'Endicode Clinic'}
             </h1>
           </div>
         </div>
@@ -142,7 +142,7 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
             </div>
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-base font-display font-semibold leading-tight tracking-tight text-sidebar-foreground">
-                {activeClinic?.name || 'Clinic Companion'}
+                {activeClinic?.name || 'Endicode Clinic'}
               </h1>
             </div>
           </div>

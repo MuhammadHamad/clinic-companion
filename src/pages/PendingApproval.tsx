@@ -9,7 +9,7 @@ import { useToast } from '@/hooks';
 
 export default function PendingApproval() {
   const { user, logout } = useAuth();
-  const { role, isLoading, hasLoadedRole, error } = useTenant();
+  const { role, clinicId, isLoading, hasLoadedRole, error } = useTenant();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -32,6 +32,8 @@ export default function PendingApproval() {
   const loadedForUserRef = useRef<string | null>(null);
   const requestSeqRef = useRef(0);
 
+  const isOrphan = Boolean(role && role !== 'super_admin' && !clinicId);
+
   useEffect(() => {
     // Reset request state when auth user changes to avoid stale flashes.
     loadedForUserRef.current = null;
@@ -45,7 +47,7 @@ export default function PendingApproval() {
   useEffect(() => {
     if (isLoading) return;
     if (error) return;
-    if (!role) return;
+    if (!role || isOrphan) return;
 
     if (role === 'super_admin') {
       navigate('/saas', { replace: true });
@@ -53,7 +55,7 @@ export default function PendingApproval() {
     }
 
     navigate('/', { replace: true });
-  }, [error, isLoading, navigate, role]);
+  }, [error, isLoading, isOrphan, navigate, role]);
 
   const loadLatestRequest = useCallback(
     async (force = false) => {
@@ -105,10 +107,10 @@ export default function PendingApproval() {
 
   useEffect(() => {
     // Only relevant if user has no role (otherwise the effect above redirects away)
-    if (!role && hasLoadedRole && !isLoading) {
+    if ((!role || isOrphan) && hasLoadedRole && !isLoading) {
       loadLatestRequest(false);
     }
-  }, [hasLoadedRole, isLoading, loadLatestRequest, role]);
+  }, [hasLoadedRole, isLoading, isOrphan, loadLatestRequest, role]);
 
   const requestStatus = useMemo(() => {
     const s = String(latestRequest?.status || '').toLowerCase();
@@ -258,7 +260,7 @@ export default function PendingApproval() {
 
   // If a role exists, we immediately redirect via the effect.
   // Returning null here prevents the pending card from flashing.
-  if (!error && role) {
+  if (!error && role && !isOrphan) {
     return null;
   }
 

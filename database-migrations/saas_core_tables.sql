@@ -87,3 +87,36 @@ create policy "clinics_manage_super_admin"
   to authenticated
   using (public.is_super_admin())
   with check (public.is_super_admin());
+
+create or replace function public.delete_auth_user(target_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+set row_security = off
+as $$
+begin
+  if not public.is_super_admin() then
+    raise exception 'not authorized';
+  end if;
+
+  if target_user_id is null then
+    raise exception 'target_user_id is required';
+  end if;
+
+  -- Delete app-side references first where applicable.
+  delete from public.user_roles where user_id = target_user_id;
+  delete from public.clinic_requests where auth_user_id = target_user_id;
+
+  -- profiles table may exist in this app; remove it to avoid orphans.
+  if to_regclass('public.profiles') is not null then
+    execute 'delete from public.profiles where id = $1' using target_user_id;
+  end if;
+
+  -- Delete the auth user (prevents any future logins).
+  delete from auth.users where id = target_user_id;
+end;
+$$;
+
+revoke all on function public.delete_auth_user(uuid) from public;
+grant execute on function public.delete_auth_user(uuid) to authenticated;

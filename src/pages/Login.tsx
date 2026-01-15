@@ -144,6 +144,8 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (isLoading) return;
+
     const nextErrors: Record<string, string> = {};
     if (!email.trim()) nextErrors.email = 'Email is required';
     if (!password) nextErrors.password = 'Password is required';
@@ -197,6 +199,28 @@ export default function Login() {
         });
 
         if (error) {
+          const msg = String(error.message || '').toLowerCase();
+          const isAlreadyRegistered = msg.includes('already registered') || msg.includes('user already registered');
+          if (isAlreadyRegistered) {
+            const result = await login(email, password);
+            if (result.success) {
+              toast({
+                title: 'Account exists',
+                description: 'Signed you in. Redirecting…',
+              });
+              navigate(from, { replace: true });
+              return;
+            }
+
+            toast({
+              title: 'Account exists',
+              description: 'This email is already registered. Please use Sign in instead.',
+              variant: 'destructive',
+            });
+            setIsSignUp(false);
+            return;
+          }
+
           toast({
             title: 'Sign up failed',
             description: error.message,
@@ -205,7 +229,41 @@ export default function Login() {
           return;
         }
 
+        // Supabase can return a successful response for an already-registered user
+        // with an empty identities array. Treat that as "account exists" and do NOT
+        // create a new clinic request.
+        const identities = (data.user as unknown as { identities?: unknown })?.identities;
+        const isExistingUser = Array.isArray(identities) && identities.length === 0;
+        if (isExistingUser) {
+          const result = await login(email, password);
+          if (result.success) {
+            toast({
+              title: 'Account exists',
+              description: 'Signed you in. Redirecting…',
+            });
+            navigate(from, { replace: true });
+            return;
+          }
+
+          toast({
+            title: 'Account exists',
+            description: 'This email is already registered. Please use Sign in instead.',
+            variant: 'destructive',
+          });
+          setIsSignUp(false);
+          return;
+        }
+
         const authUserId = data.user?.id || null;
+
+        if (!authUserId) {
+          toast({
+            title: 'Sign up incomplete',
+            description: 'Could not create user account. Please try again.',
+            variant: 'destructive',
+          });
+          return;
+        }
 
         const { error: reqError } = await supabase.from('clinic_requests').insert({
           clinic_name: clinicName.trim(),
@@ -226,6 +284,10 @@ export default function Login() {
           const isDuplicate = lower.includes('already have a clinic request');
           const isPending = lower.includes('already have a pending request');
           const isRateLimited = lower.includes('too many rejected requests');
+          const isUniqueViolation =
+            lower.includes('duplicate key') ||
+            lower.includes('unique constraint') ||
+            (reqError as unknown as { code?: string }).code === '23505';
 
           if (isDuplicate) {
             // Check the user's current request status
@@ -263,6 +325,17 @@ export default function Login() {
             return;
           }
 
+          if (isPending || isUniqueViolation) {
+            toast({
+              title: 'Request already submitted',
+              description: 'You already have a pending request. Please wait for approval.',
+              variant: 'destructive',
+            });
+            setIsSignUp(false);
+            resetAuthForm();
+            return;
+          }
+
           toast({
             title: 'Account created, but request failed',
             description: isPending
@@ -290,10 +363,11 @@ export default function Login() {
       const result = await login(email, password);
       
       if (result.success) {
-        toast({
-          title: 'Welcome back!',
-          description: 'You have successfully logged in',
-        });
+        try {
+          sessionStorage.setItem('post_login_toast', '1');
+        } catch {
+          // ignore
+        }
         navigate(from, { replace: true });
       } else {
         toast({
@@ -340,7 +414,7 @@ export default function Login() {
               <Stethoscope className="h-7 w-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-display font-bold text-white">DentalCare</h1>
+              <h1 className="text-2xl font-display font-bold text-white">Endicode Clinic</h1>
               <p className="text-sm text-white/70">Clinic Management System</p>
             </div>
           </div>
@@ -348,11 +422,11 @@ export default function Login() {
 
         <div className="relative space-y-6">
           <h2 className="text-4xl font-display font-bold text-white leading-tight">
-            Streamline Your<br />Dental Practice
+            Streamline Your<br />Clinic Operations
           </h2>
           <p className="text-lg text-white/80 max-w-md">
             Manage patients, appointments, invoices, and inventory all in one place. 
-            Built for dental clinics in Pakistan.
+            Built for clinics in Pakistan.
           </p>
           <div className="flex gap-6 text-white/60 text-sm">
             <div className="flex items-center gap-2">
@@ -367,7 +441,7 @@ export default function Login() {
         </div>
 
         <div className="relative text-sm text-white/50">
-          © 2024 DentalCare. All rights reserved.
+          © 2024 Endicode Clinic. All rights reserved.
         </div>
       </div>
 
@@ -379,7 +453,7 @@ export default function Login() {
               <Stethoscope className="h-7 w-7 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-display font-bold">DentalCare</h1>
+              <h1 className="text-2xl font-display font-bold">Endicode Clinic</h1>
               <p className="text-sm text-muted-foreground">Clinic Management</p>
             </div>
           </div>
@@ -467,16 +541,16 @@ export default function Login() {
             )
           ) : (
             <>
-              <form key={formKey} onSubmit={handleSubmit} className="space-y-5">
+              <form onSubmit={handleSubmit} className="space-y-5">
                 {isSignUp && (
                   <>
                     <div className="space-y-2">
                       <label htmlFor="clinicName" className="form-label">
-                        Clinic name
+                        Clinic Name
                       </label>
                       <Input
                         id="clinicName"
-                        placeholder="e.g. Smile Dental Clinic"
+                        placeholder="e.g. Endicode Clinic"
                         value={clinicName}
                         onChange={(e) => {
                           setClinicName(e.target.value);

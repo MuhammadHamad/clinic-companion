@@ -104,7 +104,7 @@ export function SaasSidebar({ onLogout, user }: SaasSidebarProps) {
             <Shield className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-lg font-display font-bold text-sidebar-foreground">Clinic Companion</h1>
+            <h1 className="text-lg font-display font-bold text-sidebar-foreground">Endicode Clinic</h1>
             <p className="text-xs text-sidebar-muted">Super Admin</p>
           </div>
         </div>
@@ -199,7 +199,7 @@ export function SaasSidebar({ onLogout, user }: SaasSidebarProps) {
                 <Shield className="h-5 w-5 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-lg font-display font-bold text-sidebar-foreground">Clinic Companion</h1>
+                <h1 className="text-lg font-display font-bold text-sidebar-foreground">Endicode Clinic</h1>
                 <p className="text-xs text-sidebar-muted">Super Admin</p>
               </div>
             </div>
