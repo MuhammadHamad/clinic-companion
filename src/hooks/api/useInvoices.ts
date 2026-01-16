@@ -49,7 +49,6 @@ export function useInvoices(options?: UseInvoicesOptions) {
       id: item.id,
       invoice_id: item.invoice_id,
       description: item.description,
-      tooth_number: item.tooth_number,
       quantity: item.quantity,
       unit_price: Number(item.unit_price),
       total: Number(item.total),
@@ -177,7 +176,6 @@ export function useInvoices(options?: UseInvoicesOptions) {
         .map(item => ({
           invoice_id: invoice.id,
           description: item.description,
-          tooth_number: item.tooth_number || null,
           quantity: item.quantity,
           unit_price: item.unit_price,
           total: item.total,

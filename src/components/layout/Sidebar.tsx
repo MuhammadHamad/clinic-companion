@@ -112,12 +112,12 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
   return (
     <>
       <div className="sidebar-mobile-only fixed top-0 left-0 right-0 z-50 h-16 px-4 flex items-center justify-between bg-background/80 backdrop-blur border-b border-border">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
+        <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary">
             <Stethoscope className="h-5 w-5 text-primary-foreground" />
           </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-base font-display font-semibold leading-tight tracking-tight text-foreground">
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <h1 className="truncate text-sm sm:text-base font-display font-semibold leading-tight tracking-tight text-foreground" title={activeClinic?.name || 'Endicode Clinic'}>
               {activeClinic?.name || 'Endicode Clinic'}
             </h1>
           </div>
@@ -137,11 +137,11 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
         <div className="flex h-full flex-col">
           {/* Logo */}
           <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary">
               <Stethoscope className="h-5 w-5 text-primary-foreground" />
             </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="truncate text-base font-display font-semibold leading-tight tracking-tight text-sidebar-foreground">
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <h1 className="truncate text-sm lg:text-base font-display font-semibold leading-tight tracking-tight text-sidebar-foreground" title={activeClinic?.name || 'Endicode Clinic'}>
                 {activeClinic?.name || 'Endicode Clinic'}
               </h1>
             </div>

@@ -1554,8 +1554,9 @@ export default function Inventory() {
                 <Input
                   type="number"
                   min="0"
-                  value={formData.current_quantity}
-                  onChange={(e) => setFormData({...formData, current_quantity: parseFloat(e.target.value) || 0})}
+                  value={formData.current_quantity || ''}
+                  onChange={(e) => setFormData({...formData, current_quantity: e.target.value === '' ? 0 : parseFloat(e.target.value)})}
+                  placeholder="0"
                   required
                 />
               </div>
@@ -1564,8 +1565,9 @@ export default function Inventory() {
                 <Input
                   type="number"
                   min="0"
-                  value={formData.minimum_threshold}
-                  onChange={(e) => setFormData({...formData, minimum_threshold: parseFloat(e.target.value) || 0})}
+                  value={formData.minimum_threshold || ''}
+                  onChange={(e) => setFormData({...formData, minimum_threshold: e.target.value === '' ? 0 : parseFloat(e.target.value)})}
+                  placeholder="0"
                   required
                 />
               </div>
@@ -1574,8 +1576,9 @@ export default function Inventory() {
                 <Input
                   type="number"
                   min="0"
-                  value={formData.unit_cost}
-                  onChange={(e) => setFormData({...formData, unit_cost: parseFloat(e.target.value) || 0})}
+                  value={formData.unit_cost || ''}
+                  onChange={(e) => setFormData({...formData, unit_cost: e.target.value === '' ? 0 : parseFloat(e.target.value)})}
+                  placeholder="0"
                 />
               </div>
               <div>
@@ -1663,8 +1666,9 @@ export default function Inventory() {
               <Input
                 type="number"
                 min="0"
-                value={movementData.quantity}
-                onChange={(e) => setMovementData({...movementData, quantity: parseFloat(e.target.value) || 0})}
+                value={movementData.quantity || ''}
+                onChange={(e) => setMovementData({...movementData, quantity: e.target.value === '' ? 0 : parseFloat(e.target.value)})}
+                placeholder="0"
                 required
               />
             </div>
@@ -1675,8 +1679,9 @@ export default function Inventory() {
                 <Input
                   type="number"
                   min="0"
-                  value={movementData.unit_cost}
-                  onChange={(e) => setMovementData({...movementData, unit_cost: parseFloat(e.target.value) || 0})}
+                  value={movementData.unit_cost || ''}
+                  onChange={(e) => setMovementData({...movementData, unit_cost: e.target.value === '' ? 0 : parseFloat(e.target.value)})}
+                  placeholder="0"
                 />
               </div>
             )}

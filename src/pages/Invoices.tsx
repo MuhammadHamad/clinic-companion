@@ -53,6 +53,41 @@ import { cn } from '@/lib/utils';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { InvoiceViewDialog } from '@/components/invoices/InvoiceViewDialog';
 
+const INVOICE_CREATE_DRAFT_STORAGE_KEY = 'cc_invoice_create_invoices_v1';
+
+function readInvoiceCreateDraft(): {
+  open: boolean;
+  form: {
+    patient_id: string;
+    items: InvoiceItem[];
+    discount_amount: number;
+    tax_amount: number;
+    payment_terms: string;
+    notes: string;
+  };
+} | null {
+  try {
+    const raw = sessionStorage.getItem(INVOICE_CREATE_DRAFT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as any;
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (parsed.open !== true) return null;
+    return {
+      open: true,
+      form: {
+        patient_id: typeof parsed.form?.patient_id === 'string' ? parsed.form.patient_id : '',
+        items: Array.isArray(parsed.form?.items) ? (parsed.form.items as InvoiceItem[]) : [],
+        discount_amount: Number(parsed.form?.discount_amount || 0),
+        tax_amount: Number(parsed.form?.tax_amount || 0),
+        payment_terms: typeof parsed.form?.payment_terms === 'string' ? parsed.form.payment_terms : '',
+        notes: typeof parsed.form?.notes === 'string' ? parsed.form.notes : '',
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
 const statusColors: Record<InvoiceStatus, string> = {
   draft: 'bg-muted text-muted-foreground',
   unpaid: 'bg-financial-unpaid/10 text-financial-unpaid border-financial-unpaid/20',
@@ -83,14 +118,54 @@ export default function Invoices() {
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [formData, setFormData] = useState({
-    patient_id: '',
-    items: [{ description: '', tooth_number: '', quantity: 1, unit_price: 0, total: 0 }] as InvoiceItem[],
-    discount_amount: 0,
-    tax_amount: 0,
-    payment_terms: '',
-    notes: '',
+  const [formData, setFormData] = useState(() => {
+    const draft = readInvoiceCreateDraft();
+    const base = {
+      patient_id: '',
+      items: [{ description: '', quantity: 1, unit_price: 0, total: 0 }] as InvoiceItem[],
+      discount_amount: 0,
+      tax_amount: 0,
+      payment_terms: '',
+      notes: '',
+    };
+
+    if (!draft) return base;
+    const safeItems = (draft.form.items || []).filter(Boolean);
+    return {
+      patient_id: draft.form.patient_id || '',
+      items: safeItems.length ? safeItems : base.items,
+      discount_amount: Number(draft.form.discount_amount || 0),
+      tax_amount: Number(draft.form.tax_amount || 0),
+      payment_terms: draft.form.payment_terms || '',
+      notes: draft.form.notes || '',
+    };
   });
+
+  useEffect(() => {
+    const draft = readInvoiceCreateDraft();
+    if (!draft) return;
+    setIsFormOpen(true);
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (!isFormOpen) {
+        sessionStorage.removeItem(INVOICE_CREATE_DRAFT_STORAGE_KEY);
+        return;
+      }
+
+      sessionStorage.setItem(
+        INVOICE_CREATE_DRAFT_STORAGE_KEY,
+        JSON.stringify({
+          open: true,
+          form: formData,
+          updatedAt: Date.now(),
+        }),
+      );
+    } catch {
+      // ignore
+    }
+  }, [formData, isFormOpen]);
 
   const [paymentData, setPaymentData] = useState({
     amount: 0,
@@ -136,7 +211,7 @@ export default function Invoices() {
   const openCreateForm = () => {
     setFormData({
       patient_id: '',
-      items: [{ id: '1', invoice_id: '', description: '', tooth_number: '', quantity: 1, unit_price: 0, total: 0 }],
+      items: [{ id: '1', invoice_id: '', description: '', quantity: 1, unit_price: 0, total: 0 }],
       discount_amount: 0,
       tax_amount: 0,
       payment_terms: '',
@@ -155,7 +230,7 @@ export default function Invoices() {
       patient_id: patientId,
       items: prev.items?.length
         ? prev.items
-        : [{ id: '1', invoice_id: '', description: '', tooth_number: '', quantity: 1, unit_price: 0, total: 0 }],
+        : [{ id: '1', invoice_id: '', description: '', quantity: 1, unit_price: 0, total: 0 }],
     }));
     setIsFormOpen(true);
 
@@ -200,7 +275,7 @@ export default function Invoices() {
   const addItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { id: String(Date.now()), invoice_id: '', description: '', tooth_number: '', quantity: 1, unit_price: 0, total: 0 }],
+      items: [...formData.items, { id: String(Date.now()), invoice_id: '', description: '', quantity: 1, unit_price: 0, total: 0 }],
     });
   };
 
@@ -285,6 +360,11 @@ export default function Invoices() {
 
     if (result.success) {
       setIsFormOpen(false);
+      try {
+        sessionStorage.removeItem(INVOICE_CREATE_DRAFT_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
       toast({
         title: 'Invoice Created',
         description: `Invoice created for Rs. ${total.toLocaleString()}`,
@@ -543,7 +623,19 @@ export default function Invoices() {
       </div>
 
       {/* Create Invoice Dialog */}
-      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+      <Dialog
+        open={isFormOpen}
+        onOpenChange={(open) => {
+          setIsFormOpen(open);
+          if (!open) {
+            try {
+              sessionStorage.removeItem(INVOICE_CREATE_DRAFT_STORAGE_KEY);
+            } catch {
+              // ignore
+            }
+          }
+        }}
+      >
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create Invoice</DialogTitle>
@@ -611,25 +703,20 @@ export default function Invoices() {
                   </div>
                   <div className="col-span-2">
                     <Input
-                      placeholder="Tooth #"
-                      value={item.tooth_number || ''}
-                      onChange={(e) => updateItem(index, 'tooth_number', e.target.value)}
-                    />
-                  </div>
-                  <div className="col-span-1">
-                    <Input
                       type="number"
                       min="1"
-                      value={item.quantity}
-                      onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value) || 1)}
+                      value={item.quantity || ''}
+                      onChange={(e) => updateItem(index, 'quantity', e.target.value === '' ? 1 : parseInt(e.target.value))}
+                      placeholder="1"
                     />
                   </div>
                   <div className="col-span-2">
                     <Input
                       type="number"
                       min="0"
-                      value={item.unit_price}
-                      onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                      value={item.unit_price || ''}
+                      onChange={(e) => updateItem(index, 'unit_price', e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                      placeholder="0"
                     />
                   </div>
                   <div className="col-span-2 text-right font-medium py-2">
@@ -668,9 +755,10 @@ export default function Invoices() {
                 <Input
                   type="number"
                   min="0"
-                  value={formData.discount_amount}
-                  onChange={(e) => setFormData({...formData, discount_amount: parseFloat(e.target.value) || 0})}
+                  value={formData.discount_amount || ''}
+                  onChange={(e) => setFormData({...formData, discount_amount: e.target.value === '' ? 0 : parseFloat(e.target.value)})}
                   className="w-32 text-right"
+                  placeholder="0"
                 />
               </div>
               <div className="flex justify-between items-center text-sm">
@@ -678,9 +766,10 @@ export default function Invoices() {
                 <Input
                   type="number"
                   min="0"
-                  value={formData.tax_amount}
-                  onChange={(e) => setFormData({...formData, tax_amount: parseFloat(e.target.value) || 0})}
+                  value={formData.tax_amount || ''}
+                  onChange={(e) => setFormData({...formData, tax_amount: e.target.value === '' ? 0 : parseFloat(e.target.value)})}
                   className="w-32 text-right"
+                  placeholder="0"
                 />
               </div>
               <div className="flex justify-between text-lg font-bold pt-2 border-t border-border">
@@ -700,7 +789,18 @@ export default function Invoices() {
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsFormOpen(false);
+                  try {
+                    sessionStorage.removeItem(INVOICE_CREATE_DRAFT_STORAGE_KEY);
+                  } catch {
+                    // ignore
+                  }
+                }}
+              >
                 Cancel
               </Button>
               <Button type="submit">Create Invoice</Button>
@@ -737,8 +837,9 @@ export default function Invoices() {
                 type="number"
                 min="0"
                 max={selectedInvoice?.balance}
-                value={paymentData.amount}
-                onChange={(e) => setPaymentData({...paymentData, amount: parseFloat(e.target.value) || 0})}
+                value={paymentData.amount || ''}
+                onChange={(e) => setPaymentData({...paymentData, amount: e.target.value === '' ? 0 : parseFloat(e.target.value)})}
+                placeholder="0"
                 required
               />
             </div>

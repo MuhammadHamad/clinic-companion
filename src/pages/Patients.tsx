@@ -72,7 +72,42 @@ import { patientSchema, invoiceSchema, type PatientFormData } from '@/lib/valida
 import { InvoiceViewDialog } from '@/components/invoices/InvoiceViewDialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
- type DraftInvoiceItem = Omit<InvoiceItem, 'id' | 'invoice_id'>;
+type DraftInvoiceItem = Omit<InvoiceItem, 'id' | 'invoice_id'>;
+
+const INVOICE_CREATE_DRAFT_STORAGE_KEY = 'cc_invoice_create_patients_v1';
+
+function readInvoiceCreateDraft(): {
+  open: boolean;
+  patientId: string | null;
+  form: {
+    items: DraftInvoiceItem[];
+    discount_amount: number;
+    tax_amount: number;
+    payment_terms: string;
+    notes: string;
+  };
+} | null {
+  try {
+    const raw = sessionStorage.getItem(INVOICE_CREATE_DRAFT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as any;
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (parsed.open !== true) return null;
+    return {
+      open: true,
+      patientId: typeof parsed.patientId === 'string' ? parsed.patientId : null,
+      form: {
+        items: Array.isArray(parsed.form?.items) ? (parsed.form.items as DraftInvoiceItem[]) : [],
+        discount_amount: Number(parsed.form?.discount_amount || 0),
+        tax_amount: Number(parsed.form?.tax_amount || 0),
+        payment_terms: typeof parsed.form?.payment_terms === 'string' ? parsed.form.payment_terms : '',
+        notes: typeof parsed.form?.notes === 'string' ? parsed.form.notes : '',
+      },
+    };
+  } catch {
+    return null;
+  }
+}
 
 const statusColors: Record<string, string> = {
   draft: 'bg-muted text-muted-foreground',
@@ -201,13 +236,93 @@ export default function Patients() {
 
   const [isInvoiceCreateOpen, setIsInvoiceCreateOpen] = useState(false);
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
-  const [invoiceFormData, setInvoiceFormData] = useState({
-    items: [{ description: '', tooth_number: '', quantity: 1, unit_price: 0, total: 0 }] as DraftInvoiceItem[],
-    discount_amount: 0,
-    tax_amount: 0,
-    payment_terms: '',
-    notes: '',
+  const [invoiceFormData, setInvoiceFormData] = useState(() => {
+    const draft = readInvoiceCreateDraft();
+    const base = {
+      items: [{ description: '', quantity: 1, unit_price: 0, total: 0 }] as DraftInvoiceItem[],
+      discount_amount: 0,
+      tax_amount: 0,
+      payment_terms: '',
+      notes: '',
+    };
+
+    if (!draft) return base;
+    const safeItems = (draft.form.items || []).filter(Boolean);
+    return {
+      items: safeItems.length ? safeItems : base.items,
+      discount_amount: Number(draft.form.discount_amount || 0),
+      tax_amount: Number(draft.form.tax_amount || 0),
+      payment_terms: draft.form.payment_terms || '',
+      notes: draft.form.notes || '',
+    };
   });
+
+  useEffect(() => {
+    const draft = readInvoiceCreateDraft();
+    if (!draft) return;
+    setIsInvoiceCreateOpen(true);
+    if (draft.patientId) {
+      (async () => {
+        try {
+          const { data, error } = await supabase
+            .from('patients')
+            .select('*')
+            .eq('id', draft.patientId)
+            .single();
+          if (error) throw error;
+          if (!data) return;
+          setSelectedPatient({
+            id: data.id,
+            patient_number: data.patient_number,
+            first_name: data.first_name,
+            last_name: data.last_name,
+            date_of_birth: data.date_of_birth || undefined,
+            gender: data.gender || undefined,
+            phone: data.phone,
+            email: data.email || undefined,
+            address: data.address || undefined,
+            city: data.city || undefined,
+            emergency_contact_name: data.emergency_contact_name || undefined,
+            emergency_contact_phone: data.emergency_contact_phone || undefined,
+            allergies: data.allergies || undefined,
+            current_medications: data.current_medications || undefined,
+            medical_conditions: data.medical_conditions || undefined,
+            registration_date: data.registration_date,
+            last_visit_date: data.last_visit_date || undefined,
+            notes: data.notes || undefined,
+            status: data.status,
+            created_at: data.created_at,
+            created_by: data.created_by || undefined,
+            balance: data.balance != null ? Number(data.balance) : undefined,
+            archived_at: data.archived_at || undefined,
+          } as Patient);
+        } catch (e) {
+          logger.error('Error restoring invoice draft patient:', e);
+        }
+      })();
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (!isInvoiceCreateOpen) {
+        sessionStorage.removeItem(INVOICE_CREATE_DRAFT_STORAGE_KEY);
+        return;
+      }
+
+      sessionStorage.setItem(
+        INVOICE_CREATE_DRAFT_STORAGE_KEY,
+        JSON.stringify({
+          open: true,
+          patientId: selectedPatient?.id || null,
+          form: invoiceFormData,
+          updatedAt: Date.now(),
+        }),
+      );
+    } catch {
+      // ignore
+    }
+  }, [invoiceFormData, isInvoiceCreateOpen, selectedPatient?.id]);
 
   const [isStatementOpen, setIsStatementOpen] = useState(false);
   const [isRestoreOpen, setIsRestoreOpen] = useState(false);
@@ -549,7 +664,7 @@ export default function Patients() {
   const openCreateInvoiceDialog = (patient: Patient) => {
     setSelectedPatient(patient);
     setInvoiceFormData({
-      items: [{ description: '', tooth_number: '', quantity: 1, unit_price: 0, total: 0 }] as DraftInvoiceItem[],
+      items: [{ description: '', quantity: 1, unit_price: 0, total: 0 }] as DraftInvoiceItem[],
       discount_amount: 0,
       tax_amount: 0,
       payment_terms: '',
@@ -561,7 +676,7 @@ export default function Patients() {
   const addInvoiceItem = () => {
     setInvoiceFormData((prev) => ({
       ...prev,
-      items: [...prev.items, { description: '', tooth_number: '', quantity: 1, unit_price: 0, total: 0 }],
+      items: [...prev.items, { description: '', quantity: 1, unit_price: 0, total: 0 }],
     }));
   };
 
@@ -627,6 +742,11 @@ export default function Patients() {
       if (result.success) {
         toast({ title: 'Invoice Created', description: `Invoice created for Rs. ${total.toLocaleString()}` });
         setIsInvoiceCreateOpen(false);
+        try {
+          sessionStorage.removeItem(INVOICE_CREATE_DRAFT_STORAGE_KEY);
+        } catch {
+          // ignore
+        }
         await refreshOutstandingTotal();
         if (selectedPatient) {
           await refreshSelectedPatientInvoices(selectedPatient.id);
@@ -1859,9 +1979,11 @@ export default function Patients() {
                                         <div className="flex w-full items-center justify-between gap-4">
                                           <div className="text-left">
                                             <div className="font-semibold">
-                                              {(c.caseIllness || '').trim() ? `${c.caseIllness} — ` : ''}Case #{c.caseNumber}
+                                              Case #{c.caseNumber}
                                             </div>
-                                            <div className="text-xs text-muted-foreground">Last visit: {c.lastVisit || '-'}</div>
+                                            {(c.caseIllness || '').trim() && (
+                                              <div className="text-xs text-muted-foreground">{c.caseIllness}</div>
+                                            )}
                                           </div>
                                           <div className="grid grid-cols-3 gap-3 text-right">
                                             <div>
@@ -2035,6 +2157,13 @@ export default function Patients() {
         onOpenChange={(open) => {
           setIsInvoiceCreateOpen(open);
           if (!open) setIsCreatingInvoice(false);
+          if (!open) {
+            try {
+              sessionStorage.removeItem(INVOICE_CREATE_DRAFT_STORAGE_KEY);
+            } catch {
+              // ignore
+            }
+          }
         }}
       >
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -2087,25 +2216,20 @@ export default function Patients() {
                   </div>
                   <div className="col-span-2">
                     <Input
-                      placeholder="Tooth #"
-                      value={item.tooth_number || ''}
-                      onChange={(e) => updateInvoiceItem(index, 'tooth_number', e.target.value)}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Input
                       type="number"
                       min="1"
-                      value={item.quantity}
-                      onChange={(e) => updateInvoiceItem(index, 'quantity', parseInt(e.target.value) || 1)}
+                      value={item.quantity || ''}
+                      onChange={(e) => updateInvoiceItem(index, 'quantity', e.target.value === '' ? 1 : parseInt(e.target.value))}
+                      placeholder="1"
                     />
                   </div>
                   <div className="col-span-2">
                     <Input
                       type="number"
                       min="0"
-                      value={item.unit_price}
-                      onChange={(e) => updateInvoiceItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                      value={item.unit_price || ''}
+                      onChange={(e) => updateInvoiceItem(index, 'unit_price', e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                      placeholder="0"
                     />
                   </div>
                   <div className="col-span-1 text-right font-medium py-2">
@@ -2136,9 +2260,10 @@ export default function Patients() {
                 <Input
                   type="number"
                   min="0"
-                  value={invoiceFormData.discount_amount}
-                  onChange={(e) => setInvoiceFormData({ ...invoiceFormData, discount_amount: parseFloat(e.target.value) || 0 })}
+                  value={invoiceFormData.discount_amount || ''}
+                  onChange={(e) => setInvoiceFormData({ ...invoiceFormData, discount_amount: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
                   className="w-32 text-right"
+                  placeholder="0"
                 />
               </div>
               <div className="flex justify-between items-center text-sm">
@@ -2146,9 +2271,10 @@ export default function Patients() {
                 <Input
                   type="number"
                   min="0"
-                  value={invoiceFormData.tax_amount}
-                  onChange={(e) => setInvoiceFormData({ ...invoiceFormData, tax_amount: parseFloat(e.target.value) || 0 })}
+                  value={invoiceFormData.tax_amount || ''}
+                  onChange={(e) => setInvoiceFormData({ ...invoiceFormData, tax_amount: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
                   className="w-32 text-right"
+                  placeholder="0"
                 />
               </div>
               <div className="flex justify-between text-lg font-bold pt-2 border-t border-border">
@@ -2204,8 +2330,9 @@ export default function Patients() {
                 <Input
                   type="number"
                   min="0"
-                  value={paymentData.amount}
-                  onChange={(e) => setPaymentData({ ...paymentData, amount: Number(e.target.value) })}
+                  value={paymentData.amount || ''}
+                  onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value === '' ? 0 : Number(e.target.value) })}
+                  placeholder="0"
                 />
               </div>
               <div className="col-span-2">
@@ -2419,8 +2546,9 @@ export default function Patients() {
                   <Input
                     type="number"
                     min="0"
-                    value={serviceFormData.default_price}
-                    onChange={(e) => setServiceFormData({ ...serviceFormData, default_price: parseFloat(e.target.value) || 0 })}
+                    value={serviceFormData.default_price || ''}
+                    onChange={(e) => setServiceFormData({ ...serviceFormData, default_price: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
+                    placeholder="0"
                   />
                 </div>
                 <div>
@@ -2428,8 +2556,9 @@ export default function Patients() {
                   <Input
                     type="number"
                     min="0"
-                    value={serviceFormData.duration_minutes}
-                    onChange={(e) => setServiceFormData({ ...serviceFormData, duration_minutes: parseInt(e.target.value) || 0 })}
+                    value={serviceFormData.duration_minutes || ''}
+                    onChange={(e) => setServiceFormData({ ...serviceFormData, duration_minutes: e.target.value === '' ? 0 : parseInt(e.target.value) })}
+                    placeholder="30"
                   />
                 </div>
                 <div>

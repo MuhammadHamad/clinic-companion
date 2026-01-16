@@ -115,7 +115,6 @@ export function InvoiceViewDialog({
                   <TableHeader className="bg-muted/30">
                     <TableRow>
                       <TableHead className="font-semibold text-foreground">Description</TableHead>
-                      <TableHead className="font-semibold text-foreground">Tooth</TableHead>
                       <TableHead className="text-right font-semibold text-foreground">Qty</TableHead>
                       <TableHead className="text-right font-semibold text-foreground">Price</TableHead>
                       <TableHead className="text-right font-semibold text-foreground">Total</TableHead>
@@ -125,7 +124,6 @@ export function InvoiceViewDialog({
                     {localInvoice.items?.map((item, index) => (
                       <TableRow key={index} className="hover:bg-muted/20 transition-colors">
                         <TableCell className="font-medium text-foreground">{item.description}</TableCell>
-                        <TableCell className="text-muted-foreground">{item.tooth_number || '-'}</TableCell>
                         <TableCell className="text-right text-foreground">{item.quantity}</TableCell>
                         <TableCell className="text-right text-foreground">Rs. {item.unit_price.toLocaleString()}</TableCell>
                         <TableCell className="text-right font-medium text-foreground">Rs. {item.total.toLocaleString()}</TableCell>
