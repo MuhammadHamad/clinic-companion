@@ -80,6 +80,30 @@ create policy "clinics_select_own"
     )
   );
 
+drop policy if exists "clinics_update_own_admin" on public.clinics;
+create policy "clinics_update_own_admin"
+  on public.clinics
+  for update
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.user_roles ur
+      where ur.user_id = auth.uid()
+        and ur.role = 'admin'
+        and ur.clinic_id = public.clinics.id
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.user_roles ur
+      where ur.user_id = auth.uid()
+        and ur.role = 'admin'
+        and ur.clinic_id = public.clinics.id
+    )
+  );
+
 drop policy if exists "clinics_manage_super_admin" on public.clinics;
 create policy "clinics_manage_super_admin"
   on public.clinics

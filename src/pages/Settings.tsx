@@ -36,6 +36,7 @@ export default function Settings() {
   const { toast } = useToast();
 
   const [clinicName, setClinicName] = useState('');
+  const [isClinicNameDirty, setIsClinicNameDirty] = useState(false);
   const [isSavingClinic, setIsSavingClinic] = useState(false);
 
   const [firstName, setFirstName] = useState(user?.user_metadata?.first_name || '');
@@ -61,7 +62,13 @@ export default function Settings() {
 
   useEffect(() => {
     setClinicName(activeClinic?.name || '');
-  }, [activeClinic?.id, activeClinic?.name]);
+    setIsClinicNameDirty(false);
+  }, [activeClinic?.id]);
+
+  useEffect(() => {
+    if (isClinicNameDirty) return;
+    setClinicName(activeClinic?.name || '');
+  }, [activeClinic?.name, isClinicNameDirty]);
 
   const handleSaveClinic = async () => {
     if (!activeClinicId) {
@@ -85,18 +92,28 @@ export default function Settings() {
 
     setIsSavingClinic(true);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('clinics')
         .update({ name: displayName })
-        .eq('id', activeClinicId);
+        .eq('id', activeClinicId)
+        .select('id, name, slug')
+        .single();
 
       if (error) throw error;
 
+      // If RLS blocks UPDATE, Supabase can sometimes return no error but also no row.
+      // Treat this as a hard failure so we never "pretend" it saved.
+      if (!data?.id) {
+        throw new Error('Clinic name could not be saved. Your account is not permitted to update this clinic.');
+      }
+
+      // Update UI immediately even if the re-fetch is blocked by RLS.
+      setActiveClinicName(data.name);
+      setClinicName(data.name);
+      setIsClinicNameDirty(false);
+
       // Best-effort re-fetch to sync all tenant state.
       await refresh();
-
-      // Update UI after refresh to ensure the name persists
-      setActiveClinicName(displayName);
 
       toast({
         title: 'Clinic updated',
@@ -186,13 +203,15 @@ export default function Settings() {
                     <label className="form-label">Clinic Name</label>
                     <Input
                       value={clinicName}
-                      onChange={(e) => setClinicName(e.target.value)}
-                      placeholder={isTenantLoading ? 'Loading…' : "Enter clinic name"}
+                      onChange={(e) => {
+                        setClinicName(e.target.value);
+                        setIsClinicNameDirty(true);
+                      }}
+                      placeholder={isTenantLoading ? 'Loading…' : 'Enter clinic name'}
                       disabled={isTenantLoading || !activeClinicId}
                     />
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Example: <span className="font-medium">Mohammed&apos;s Clinic</span> or{' '}
-                      <span className="font-medium">City Medical Center</span>
+                      Example: <span className="font-medium">City Medical Center</span>
                     </p>
                   </div>
                 </div>
