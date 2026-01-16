@@ -61,7 +61,7 @@ export default function Settings() {
 
   useEffect(() => {
     setClinicName(activeClinic?.name || '');
-  }, [activeClinic?.id]);
+  }, [activeClinic?.id, activeClinic?.name]);
 
   const handleSaveClinic = async () => {
     if (!activeClinicId) {
@@ -92,11 +92,11 @@ export default function Settings() {
 
       if (error) throw error;
 
-      // Update UI immediately even if the re-fetch is blocked by RLS.
-      setActiveClinicName(displayName);
-
       // Best-effort re-fetch to sync all tenant state.
       await refresh();
+
+      // Update UI after refresh to ensure the name persists
+      setActiveClinicName(displayName);
 
       toast({
         title: 'Clinic updated',
