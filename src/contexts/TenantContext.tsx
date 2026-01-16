@@ -241,9 +241,20 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         } catch {
           // ignore
         }
+      } else {
+        // If RLS blocks reading clinics but updates are allowed, we still want to
+        // keep the last known clinic name (optimistic UI) instead of reverting.
+        // Use cached name as fallback
+        const cache = readClinicNameCache();
+        const cachedName = cache[id];
+        if (cachedName) {
+          setActiveClinic({
+            id,
+            name: cachedName,
+            slug: null,
+          });
+        }
       }
-      // If RLS blocks reading clinics but updates are allowed, we still want to
-      // keep the last known clinic name (optimistic UI) instead of reverting.
       return;
     }
 
