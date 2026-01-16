@@ -35,6 +35,9 @@ export default function Settings() {
   const { activeClinic, activeClinicId, isLoading: isTenantLoading, refresh, setActiveClinicName } = useTenant();
   const { toast } = useToast();
 
+  const appVersion = (import.meta as any).env?.VITE_APP_VERSION as string | undefined;
+  const gitSha = (import.meta as any).env?.VITE_GIT_SHA as string | undefined;
+
   const [clinicName, setClinicName] = useState('');
   const [isClinicNameDirty, setIsClinicNameDirty] = useState(false);
   const [isSavingClinic, setIsSavingClinic] = useState(false);
@@ -416,6 +419,11 @@ export default function Settings() {
             </div>
           </TabsContent>
         </Tabs>
+
+        <div className="mt-10 text-xs text-muted-foreground">
+          Version: {appVersion || 'dev'}
+          {gitSha ? ` (${String(gitSha).slice(0, 7)})` : ''}
+        </div>
       </div>
     </div>
   );
