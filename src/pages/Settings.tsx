@@ -60,7 +60,7 @@ export default function Settings() {
   }, [user?.id]);
 
   useEffect(() => {
-    setClinicName(toClinicBaseName(activeClinic?.name || ''));
+    setClinicName(activeClinic?.name || '');
   }, [activeClinic?.id]);
 
   const handleSaveClinic = async () => {
@@ -73,26 +73,7 @@ export default function Settings() {
       return;
     }
 
-    const baseName = String(clinicName || '').trim();
-    if (!baseName) {
-      toast({
-        title: 'Validation error',
-        description: 'Clinic name is required.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (/\s/.test(baseName)) {
-      toast({
-        title: 'Validation error',
-        description: 'Please enter only one name (no spaces).',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const displayName = toClinicDisplayName(baseName);
+    const displayName = String(clinicName || '').trim();
     if (!displayName) {
       toast({
         title: 'Validation error',
@@ -205,18 +186,13 @@ export default function Settings() {
                     <label className="form-label">Clinic Name</label>
                     <Input
                       value={clinicName}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        const normalized = String(raw || '').replace(/\s+/g, ' ').trim();
-                        const first = normalized.split(' ')[0] || '';
-                        setClinicName(first);
-                      }}
-                      placeholder={isTenantLoading ? 'Loading…' : "Enter clinic owner's name"}
+                      onChange={(e) => setClinicName(e.target.value)}
+                      placeholder={isTenantLoading ? 'Loading…' : "Enter clinic name"}
                       disabled={isTenantLoading || !activeClinicId}
                     />
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Example: enter <span className="font-medium">Mohammed</span> to get{' '}
-                      <span className="font-medium">Mohammed&apos;s Clinic</span>
+                      Example: <span className="font-medium">Mohammed&apos;s Clinic</span> or{' '}
+                      <span className="font-medium">City Medical Center</span>
                     </p>
                   </div>
                 </div>
