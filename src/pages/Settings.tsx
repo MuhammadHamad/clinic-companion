@@ -35,9 +35,6 @@ export default function Settings() {
   const { activeClinic, activeClinicId, isLoading: isTenantLoading, refresh, setActiveClinicName } = useTenant();
   const { toast } = useToast();
 
-  const appVersion = (import.meta as any).env?.VITE_APP_VERSION as string | undefined;
-  const gitSha = (import.meta as any).env?.VITE_GIT_SHA as string | undefined;
-
   const [clinicName, setClinicName] = useState('');
   const [isClinicNameDirty, setIsClinicNameDirty] = useState(false);
   const [isSavingClinic, setIsSavingClinic] = useState(false);
@@ -293,15 +290,6 @@ export default function Settings() {
                 <CardDescription>Update your personal information</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center gap-6">
-                  <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center text-primary text-2xl font-bold">
-                    {profileInitials}
-                  </div>
-                  <div>
-                    <Button variant="outline">Change Photo</Button>
-                    <p className="text-sm text-muted-foreground mt-1">JPG or PNG. Max 2MB.</p>
-                  </div>
-                </div>
                 <div className="grid grid-cols-1 gap-4 max-w-xl">
                   <div>
                     <label className="form-label">First Name</label>
@@ -419,11 +407,6 @@ export default function Settings() {
             </div>
           </TabsContent>
         </Tabs>
-
-        <div className="mt-10 text-xs text-muted-foreground">
-          Version: {appVersion || 'dev'}
-          {gitSha ? ` (${String(gitSha).slice(0, 7)})` : ''}
-        </div>
       </div>
     </div>
   );
