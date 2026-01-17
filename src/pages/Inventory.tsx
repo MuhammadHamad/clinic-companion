@@ -526,8 +526,28 @@ export default function Inventory() {
     let y = height - 48;
     const marginX = 40;
 
-    const drawText = (text: string, x: number, size: number, isBold = false, color = rgb(0.12, 0.12, 0.12)) => {
+    const colorText = rgb(0.12, 0.12, 0.12);
+    const colorMuted = rgb(0.38, 0.38, 0.38);
+    const colorBorder = rgb(0.9, 0.9, 0.9);
+    const colorHeaderBg = rgb(0.965, 0.965, 0.965);
+    const colorRowAlt = rgb(0.985, 0.985, 0.985);
+    const colorAccent = rgb(0.2, 0.35, 0.8);
+    const colorIn = rgb(0.05, 0.6, 0.4);
+    const colorOut = rgb(0.85, 0.1, 0.25);
+    const colorAdj = rgb(0.75, 0.45, 0.05);
+
+    const textWidth = (text: string, size: number, isBold = false) => {
+      const f = isBold ? fontBold : font;
+      return f.widthOfTextAtSize(text, size);
+    };
+
+    const drawText = (text: string, x: number, size: number, isBold = false, color = colorText) => {
       page.drawText(text, { x, y, size, font: isBold ? fontBold : font, color });
+    };
+
+    const drawTextRight = (text: string, rightX: number, size: number, isBold = false, color = colorText) => {
+      const w = textWidth(text, size, isBold);
+      page.drawText(text, { x: rightX - w, y, size, font: isBold ? fontBold : font, color });
     };
 
     const nextLine = (lineHeight: number) => {
@@ -540,15 +560,30 @@ export default function Inventory() {
     };
 
     const rule = () => {
-      page.drawLine({ start: { x: marginX, y: y - 6 }, end: { x: width - marginX, y: y - 6 }, thickness: 1, color: rgb(0.9, 0.9, 0.9) });
+      page.drawLine({ start: { x: marginX, y: y - 6 }, end: { x: width - marginX, y: y - 6 }, thickness: 1, color: colorBorder });
       nextLine(18);
     };
 
-    drawText('Supplier Ledger', marginX, 18, true);
-    nextLine(24);
-    drawText(`Supplier: ${supplierName}${supplierContact ? ` • ${supplierContact}` : ''}`, marginX, 11);
+    const sectionTitle = (label: string) => {
+      drawText(label, marginX, 12, true, colorText);
+      nextLine(10);
+      page.drawLine({ start: { x: marginX, y: y - 2 }, end: { x: width - marginX, y: y - 2 }, thickness: 1, color: colorBorder });
+      nextLine(16);
+    };
+
+    drawText('Supplier Ledger', marginX, 20, true, colorText);
     nextLine(16);
-    drawText(`Range: ${rangeLabel} • Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm')}`, marginX, 10, false, rgb(0.35, 0.35, 0.35));
+    page.drawLine({ start: { x: marginX, y: y - 2 }, end: { x: marginX + 160, y: y - 2 }, thickness: 2, color: colorAccent });
+    nextLine(18);
+
+    drawText('Supplier', marginX, 9, true, colorMuted);
+    drawText(`${supplierName}${supplierContact ? ` • ${supplierContact}` : ''}`, marginX + 70, 11, true, colorText);
+    nextLine(16);
+
+    drawText('Range', marginX, 9, true, colorMuted);
+    drawText(rangeLabel, marginX + 70, 10, false, colorText);
+    drawText('Generated', marginX + 330, 9, true, colorMuted);
+    drawText(format(new Date(), 'yyyy-MM-dd HH:mm'), marginX + 400, 10, false, colorText);
     nextLine(18);
     rule();
 
@@ -561,82 +596,141 @@ export default function Inventory() {
       ['Last Purchase Price', supplierLedgerInsights.lastPurchase?.unit_cost != null ? `Rs. ${Number(supplierLedgerInsights.lastPurchase.unit_cost).toLocaleString()}` : '-'],
     ];
 
-    drawText('Overview', marginX, 12, true);
-    nextLine(18);
+    sectionTitle('Overview');
 
     for (const [label, value] of kpi) {
-      drawText(label, marginX, 10, true);
-      drawText(String(value), marginX + 160, 10);
-      nextLine(14);
+      drawText(label, marginX, 9, true, colorMuted);
+      drawTextRight(String(value), width - marginX, 10, true, colorText);
+      nextLine(16);
     }
 
-    nextLine(6);
+    nextLine(4);
     rule();
 
-    drawText('Items', marginX, 12, true);
-    nextLine(16);
-    drawText('Item', marginX, 10, true);
-    drawText('Category', marginX + 220, 10, true);
-    drawText('Qty', marginX + 360, 10, true);
-    drawText('Unit Cost', marginX + 410, 10, true);
-    drawText('Value', marginX + 500, 10, true);
-    nextLine(14);
-    rule();
+    sectionTitle('Items');
+
+    const itemsColItem = marginX;
+    const itemsColCategory = marginX + 250;
+    const itemsColQtyRight = marginX + 380;
+    const itemsColUnitRight = marginX + 470;
+    const itemsColValueRight = width - marginX;
+
+    page.drawRectangle({ x: marginX, y: y - 14, width: width - marginX * 2, height: 18, color: colorHeaderBg });
+    drawText('Item', itemsColItem, 9, true);
+    drawText('Category', itemsColCategory, 9, true);
+    drawTextRight('Qty', itemsColQtyRight, 9, true);
+    drawTextRight('Unit Cost', itemsColUnitRight, 9, true);
+    drawTextRight('Value', itemsColValueRight, 9, true);
+    nextLine(18);
+    page.drawLine({ start: { x: marginX, y: y - 2 }, end: { x: width - marginX, y: y - 2 }, thickness: 1, color: colorBorder });
+    nextLine(12);
 
     const itemsSorted = selectedSupplier.items.slice().sort((a, b) => a.item_name.localeCompare(b.item_name));
     if (itemsSorted.length === 0) {
-      drawText('No items', marginX, 10, false, rgb(0.45, 0.45, 0.45));
-      nextLine(16);
+      drawText('No items', marginX, 10, false, colorMuted);
+      nextLine(18);
     } else {
-      for (const it of itemsSorted) {
+      for (const [idx, it] of itemsSorted.entries()) {
         const qty = Number(it.current_quantity || 0);
         const cost = Number(it.unit_cost || 0);
         const value = qty * cost;
-        drawText(String(it.item_name || '-').slice(0, 40), marginX, 9);
-        drawText(String(it.category?.name || '-').slice(0, 22), marginX + 220, 9);
-        drawText(String(qty), marginX + 360, 9);
-        drawText(it.unit_cost ? `Rs. ${cost.toLocaleString()}` : '-', marginX + 410, 9);
-        drawText(`Rs. ${value.toLocaleString()}`, marginX + 500, 9);
-        nextLine(12);
+        if (y < 80) {
+          page = addPage();
+          ({ width, height } = page.getSize());
+          y = height - 48;
+
+          sectionTitle('Items (cont.)');
+          page.drawRectangle({ x: marginX, y: y - 14, width: width - marginX * 2, height: 18, color: colorHeaderBg });
+          drawText('Item', itemsColItem, 9, true);
+          drawText('Category', itemsColCategory, 9, true);
+          drawTextRight('Qty', itemsColQtyRight, 9, true);
+          drawTextRight('Unit Cost', itemsColUnitRight, 9, true);
+          drawTextRight('Value', itemsColValueRight, 9, true);
+          nextLine(18);
+          page.drawLine({ start: { x: marginX, y: y - 2 }, end: { x: width - marginX, y: y - 2 }, thickness: 1, color: colorBorder });
+          nextLine(12);
+        }
+
+        if (idx % 2 === 1) {
+          page.drawRectangle({ x: marginX, y: y - 12, width: width - marginX * 2, height: 16, color: colorRowAlt });
+        }
+
+        drawText(String(it.item_name || '-').slice(0, 44), itemsColItem, 9, false, colorText);
+        drawText(String(it.category?.name || '-').slice(0, 24), itemsColCategory, 9, false, colorMuted);
+        drawTextRight(String(qty), itemsColQtyRight, 9, true, colorText);
+        drawTextRight(it.unit_cost ? `Rs. ${cost.toLocaleString()}` : '-', itemsColUnitRight, 9, false, colorText);
+        drawTextRight(`Rs. ${value.toLocaleString()}`, itemsColValueRight, 9, true, colorText);
+        nextLine(16);
       }
     }
 
     nextLine(8);
     rule();
 
-    drawText('Movements', marginX, 12, true);
-    nextLine(16);
-    drawText('Date', marginX, 10, true);
-    drawText('Item', marginX + 70, 10, true);
-    drawText('Type', marginX + 250, 10, true);
-    drawText('Qty', marginX + 320, 10, true);
-    drawText('Unit Cost', marginX + 360, 10, true);
-    drawText('Value', marginX + 445, 10, true);
-    drawText('Notes', marginX + 505, 10, true);
-    nextLine(14);
-    rule();
+    sectionTitle('Movements');
+
+    const movColDate = marginX;
+    const movColItem = marginX + 80;
+    const movColType = marginX + 270;
+    const movColQtyRight = marginX + 350;
+    const movColUnitRight = marginX + 440;
+    const movColValueRight = width - marginX;
+
+    page.drawRectangle({ x: marginX, y: y - 14, width: width - marginX * 2, height: 18, color: colorHeaderBg });
+    drawText('Date', movColDate, 9, true);
+    drawText('Item', movColItem, 9, true);
+    drawText('Type', movColType, 9, true);
+    drawTextRight('Qty', movColQtyRight, 9, true);
+    drawTextRight('Unit Cost', movColUnitRight, 9, true);
+    drawTextRight('Value', movColValueRight, 9, true);
+    nextLine(18);
+    page.drawLine({ start: { x: marginX, y: y - 2 }, end: { x: width - marginX, y: y - 2 }, thickness: 1, color: colorBorder });
+    nextLine(12);
 
     if (filteredSupplierMovements.length === 0) {
-      drawText('No movements', marginX, 10, false, rgb(0.45, 0.45, 0.45));
-      nextLine(16);
+      drawText('No movements', marginX, 10, false, colorMuted);
+      nextLine(18);
     } else {
-      for (const m of filteredSupplierMovements) {
+      for (const [idx, m] of filteredSupplierMovements.entries()) {
         const date = (m.movement_date || m.created_at?.split('T')[0] || '-').slice(0, 10);
         const itemName = (m.item?.item_name || '-').slice(0, 28);
         const type = m.movement_type.replace('_', ' ');
         const qty = Number(m.quantity || 0);
         const unitCost = Number(m.unit_cost || 0);
         const value = qty * unitCost;
-        const notes = (m.notes || '').replace(/\s+/g, ' ').slice(0, 18);
 
-        drawText(date, marginX, 8);
-        drawText(itemName, marginX + 70, 8);
-        drawText(type, marginX + 250, 8);
-        drawText(String(qty), marginX + 320, 8);
-        drawText(m.unit_cost != null ? `Rs. ${unitCost.toLocaleString()}` : '-', marginX + 360, 8);
-        drawText(`Rs. ${value.toLocaleString()}`, marginX + 445, 8);
-        drawText(notes || '-', marginX + 505, 8);
-        nextLine(11);
+        if (y < 80) {
+          page = addPage();
+          ({ width, height } = page.getSize());
+          y = height - 48;
+
+          sectionTitle('Movements (cont.)');
+          page.drawRectangle({ x: marginX, y: y - 14, width: width - marginX * 2, height: 18, color: colorHeaderBg });
+          drawText('Date', movColDate, 9, true);
+          drawText('Item', movColItem, 9, true);
+          drawText('Type', movColType, 9, true);
+          drawTextRight('Qty', movColQtyRight, 9, true);
+          drawTextRight('Unit Cost', movColUnitRight, 9, true);
+          drawTextRight('Value', movColValueRight, 9, true);
+          nextLine(18);
+          page.drawLine({ start: { x: marginX, y: y - 2 }, end: { x: width - marginX, y: y - 2 }, thickness: 1, color: colorBorder });
+          nextLine(12);
+        }
+
+        if (idx % 2 === 1) {
+          page.drawRectangle({ x: marginX, y: y - 12, width: width - marginX * 2, height: 16, color: colorRowAlt });
+        }
+
+        const typeColor =
+          m.movement_type === 'stock_in' ? colorIn : m.movement_type === 'stock_out' ? colorOut : colorAdj;
+
+        drawText(date, movColDate, 8, false, colorMuted);
+        drawText(itemName, movColItem, 8, true, colorText);
+        drawText(type, movColType, 8, true, typeColor);
+        drawTextRight(String(qty), movColQtyRight, 8, true, colorText);
+        drawTextRight(m.unit_cost != null ? `Rs. ${unitCost.toLocaleString()}` : '-', movColUnitRight, 8, false, colorText);
+        drawTextRight(`Rs. ${value.toLocaleString()}`, movColValueRight, 8, true, colorText);
+        nextLine(16);
       }
     }
 

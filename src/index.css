@@ -742,11 +742,12 @@ body.scroll-locked {
 
   html, body {
     height: auto !important;
+    background: #ffffff !important;
   }
 
   body {
-    background: white;
-    color: #111827;
+    background: #ffffff !important;
+    color: #111827 !important;
     margin: 0 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
@@ -773,6 +774,47 @@ body.scroll-locked {
   body.printing-statement .bg-black\/80,
   body.statement-open .bg-black\/80 {
     display: none !important;
+  }
+
+  body.printing-invoice #root {
+    display: none !important;
+  }
+
+  body.printing-invoice * {
+    visibility: hidden !important;
+  }
+
+  body.printing-invoice .invoice-print,
+  body.printing-invoice .invoice-print * {
+    visibility: visible !important;
+  }
+
+  body.printing-invoice .bg-black\/80 {
+    display: none !important;
+  }
+
+  body.printing-invoice .invoice-print {
+    display: block !important;
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+    translate: none !important;
+    margin: 0 !important;
+    border: 0 !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    max-width: none !important;
+    width: 100% !important;
+    padding: 2.5rem !important;
+    font-size: 12pt !important;
+    line-height: 1.35 !important;
   }
 
   body.printing-statement .patient-statement-print,

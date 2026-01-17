@@ -118,6 +118,28 @@ export function useInvoices(options?: UseInvoicesOptions) {
     }
   }, []);
 
+  const fetchInvoiceById = useCallback(async (invoiceId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select(`
+          *,
+          patient:patients(*),
+          items:invoice_items(*)
+        `)
+        .eq('id', invoiceId)
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error('Invoice not found');
+
+      return { success: true, data: mapRowToInvoice(data) as Invoice };
+    } catch (error: any) {
+      logger.error('Error fetching invoice by id:', error);
+      return { success: false, error: error.message };
+    }
+  }, []);
+
   const fetchInvoicesForPatient = useCallback(async (patientId: string) => {
     try {
       const { data, error } = await supabase
@@ -426,6 +448,7 @@ export function useInvoices(options?: UseInvoicesOptions) {
     fetchInvoices,
     fetchInvoiceSummariesByPatientIds,
     fetchInvoicesForPatient,
+    fetchInvoiceById,
     createInvoice,
     recordPayment,
     updateInvoiceDiscount,
