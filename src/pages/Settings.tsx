@@ -10,6 +10,7 @@ import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks';
 import { Building, User, Bell } from 'lucide-react';
+import { getPublicAppUrl } from '@/lib/appUrl';
 
 function toClinicBaseName(storedName: string): string {
   let next = String(storedName || '').trim();
@@ -32,7 +33,7 @@ function toClinicDisplayName(baseName: string): string {
 
 export default function Settings() {
   const { user } = useAuth();
-  const { activeClinic, activeClinicId, isLoading: isTenantLoading, refresh, setActiveClinicName } = useTenant();
+  const { role, activeClinic, activeClinicId, isLoading: isTenantLoading, refresh, setActiveClinicName } = useTenant();
   const { toast } = useToast();
 
   const [clinicName, setClinicName] = useState('');
@@ -43,6 +44,9 @@ export default function Settings() {
   const [lastName, setLastName] = useState(user?.user_metadata?.last_name || '');
   const [phone, setPhone] = useState(user?.user_metadata?.phone || '');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  const [smtpTestEmail, setSmtpTestEmail] = useState(user?.email || '');
+  const [isSendingSmtpTest, setIsSendingSmtpTest] = useState(false);
 
   const showAdvancedClinicSettings = false;
   const showAdvancedNotifications = false;
@@ -58,7 +62,43 @@ export default function Settings() {
     setFirstName(user?.user_metadata?.first_name || '');
     setLastName(user?.user_metadata?.last_name || '');
     setPhone(user?.user_metadata?.phone || '');
+    setSmtpTestEmail(user?.email || '');
   }, [user?.id]);
+
+  const handleSendSmtpTest = async () => {
+    const email = String(smtpTestEmail || '').trim();
+    if (!email) {
+      toast({
+        title: 'Validation error',
+        description: 'Email is required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (isSendingSmtpTest) return;
+    setIsSendingSmtpTest(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${getPublicAppUrl()}/reset-password`,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Test email sent',
+        description: 'Check inbox/spam. If it does not arrive, SMTP is misconfigured in Supabase.',
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Failed to send test email',
+        description: err?.message || 'An unexpected error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSendingSmtpTest(false);
+    }
+  };
 
   useEffect(() => {
     setClinicName(activeClinic?.name || '');
@@ -217,6 +257,28 @@ export default function Settings() {
                 </div>
               </CardContent>
             </Card>
+
+            {(role === 'admin' || role === 'super_admin') && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Email (SMTP)</CardTitle>
+                  <CardDescription>Send a test password reset email to verify SMTP deliverability</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4 max-w-xl">
+                    <div>
+                      <label className="form-label">Test Email</label>
+                      <Input value={smtpTestEmail} onChange={(e) => setSmtpTestEmail(e.target.value)} />
+                    </div>
+                    <div className="flex justify-end">
+                      <Button onClick={handleSendSmtpTest} disabled={isSendingSmtpTest}>
+                        {isSendingSmtpTest ? 'Sending…' : 'Send Test Email'}
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {showAdvancedClinicSettings && (
               <>

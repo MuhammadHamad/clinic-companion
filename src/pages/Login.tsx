@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks';
+import { getPublicAppUrl } from '@/lib/appUrl';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -112,9 +113,8 @@ export default function Login() {
     setIsLoading(true);
     
     try {
-      const appUrl = String(import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/+$/, '');
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${appUrl}/reset-password`,
+        redirectTo: `${getPublicAppUrl()}/reset-password`,
       });
 
       if (error) {
@@ -189,7 +189,7 @@ export default function Login() {
     
     try {
       if (isSignUp) {
-        const redirectUrl = `${window.location.origin}/`;
+        const redirectUrl = `${getPublicAppUrl()}/`;
         const { data, error } = await supabase.auth.signUp({
           email,
           password,

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks';
+import { getPublicAppUrl } from '@/lib/appUrl';
 
 export default function PendingApproval() {
   const { user, logout } = useAuth();
@@ -138,7 +139,7 @@ export default function PendingApproval() {
 
     try {
       // Try multiple approaches to resend verification
-      const redirectUrl = `${window.location.origin}/`;
+      const redirectUrl = `${getPublicAppUrl()}/`;
       
       // Method 1: Standard resend
       let { error: resendError } = await supabase.auth.resend({
