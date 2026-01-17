@@ -75,6 +75,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 type DraftInvoiceItem = Omit<InvoiceItem, 'id' | 'invoice_id'>;
 
 const INVOICE_CREATE_DRAFT_STORAGE_KEY = 'cc_invoice_create_patients_v1';
+const INVOICE_VIEW_STORAGE_KEY = 'cc_invoice_view_patients_v1';
+const STATEMENT_VIEW_STORAGE_KEY = 'cc_statement_view_patients_v1';
 
 function readInvoiceCreateDraft(): {
   open: boolean;
@@ -109,6 +111,36 @@ function readInvoiceCreateDraft(): {
   }
 }
 
+function readStatementViewDraft(): { patientId: string | null; pathname: string | null } | null {
+  try {
+    const raw = sessionStorage.getItem(STATEMENT_VIEW_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as any;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      patientId: typeof parsed.patientId === 'string' ? parsed.patientId : null,
+      pathname: typeof parsed.pathname === 'string' ? parsed.pathname : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function readInvoiceViewDraft(): { invoiceId: string | null; pathname: string | null } | null {
+  try {
+    const raw = sessionStorage.getItem(INVOICE_VIEW_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as any;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      invoiceId: typeof parsed.invoiceId === 'string' ? parsed.invoiceId : null,
+      pathname: typeof parsed.pathname === 'string' ? parsed.pathname : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 const statusColors: Record<string, string> = {
   draft: 'bg-muted text-muted-foreground',
   unpaid: 'bg-financial-unpaid/10 text-financial-unpaid border-financial-unpaid/20',
@@ -134,6 +166,7 @@ export default function Patients() {
     createInvoice,
     fetchInvoiceSummariesByPatientIds,
     fetchInvoicesForPatient,
+    fetchInvoiceById,
   } = useInvoices({ autoFetch: false });
   const { treatmentTypes, createTreatmentType, updateTreatmentType, deleteTreatmentType } = useTreatmentTypes();
   const location = useLocation();
@@ -226,6 +259,20 @@ export default function Patients() {
 
   const [isInvoiceViewOpen, setIsInvoiceViewOpen] = useState(false);
   const [selectedInvoiceForView, setSelectedInvoiceForView] = useState<Invoice | null>(null);
+
+  useEffect(() => {
+    const draft = readInvoiceViewDraft();
+    if (!draft?.invoiceId) return;
+    if (draft.pathname && draft.pathname !== location.pathname) return;
+    if (isInvoiceViewOpen) return;
+
+    (async () => {
+      const res = await fetchInvoiceById(draft.invoiceId as string);
+      if (!res.success) return;
+      setSelectedInvoiceForView(res.data);
+      setIsInvoiceViewOpen(true);
+    })();
+  }, [fetchInvoiceById, isInvoiceViewOpen, location.pathname]);
 
   const [invoiceSummariesByPatientId, setInvoiceSummariesByPatientId] = useState<
     Record<string, { balance: number; lastVisit: string | null }>
@@ -328,6 +375,75 @@ export default function Patients() {
   const [isRestoreOpen, setIsRestoreOpen] = useState(false);
   const [patientToRestore, setPatientToRestore] = useState<Patient | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
+
+  const openStatementDialog = useCallback(() => {
+    if (!selectedPatient?.id) {
+      setIsStatementOpen(true);
+      return;
+    }
+
+    setIsStatementOpen(true);
+    try {
+      sessionStorage.setItem(
+        STATEMENT_VIEW_STORAGE_KEY,
+        JSON.stringify({ patientId: selectedPatient.id, pathname: location.pathname, updatedAt: Date.now() }),
+      );
+    } catch {
+      // ignore
+    }
+  }, [location.pathname, selectedPatient?.id]);
+
+  useEffect(() => {
+    const draft = readStatementViewDraft();
+    if (!draft?.patientId) return;
+    if (draft.pathname && draft.pathname !== location.pathname) return;
+    if (isStatementOpen) return;
+
+    (async () => {
+      try {
+        if (!selectedPatient || selectedPatient.id !== draft.patientId) {
+          const { data, error } = await supabase
+            .from('patients')
+            .select('*')
+            .eq('id', draft.patientId)
+            .single();
+
+          if (error) throw error;
+          if (!data) return;
+
+          setSelectedPatient({
+            id: data.id,
+            patient_number: data.patient_number,
+            first_name: data.first_name,
+            last_name: data.last_name,
+            date_of_birth: data.date_of_birth || undefined,
+            gender: data.gender || undefined,
+            phone: data.phone,
+            email: data.email || undefined,
+            address: data.address || undefined,
+            city: data.city || undefined,
+            emergency_contact_name: data.emergency_contact_name || undefined,
+            emergency_contact_phone: data.emergency_contact_phone || undefined,
+            allergies: data.allergies || undefined,
+            current_medications: data.current_medications || undefined,
+            medical_conditions: data.medical_conditions || undefined,
+            registration_date: data.registration_date,
+            last_visit_date: data.last_visit_date || undefined,
+            notes: data.notes || undefined,
+            status: data.status,
+            created_at: data.created_at,
+            created_by: data.created_by || undefined,
+            balance: data.balance != null ? Number(data.balance) : undefined,
+            archived_at: data.archived_at || undefined,
+          } as Patient);
+        }
+
+        setIsStatementOpen(true);
+      } catch (e) {
+        logger.error('Error restoring statement modal:', e);
+      }
+    })();
+  }, [isStatementOpen, location.pathname, selectedPatient, setSelectedPatient]);
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -659,6 +775,14 @@ export default function Patients() {
   const openInvoiceViewDialog = (invoice: Invoice) => {
     setSelectedInvoiceForView(invoice);
     setIsInvoiceViewOpen(true);
+    try {
+      sessionStorage.setItem(
+        INVOICE_VIEW_STORAGE_KEY,
+        JSON.stringify({ invoiceId: invoice.id, pathname: location.pathname, updatedAt: Date.now() }),
+      );
+    } catch {
+      // ignore
+    }
   };
 
   const openCreateInvoiceDialog = (patient: Patient) => {
@@ -1487,7 +1611,16 @@ export default function Patients() {
       {/* Patient Statement (Ledger) Dialog */}
       <Dialog
         open={isStatementOpen}
-        onOpenChange={setIsStatementOpen}
+        onOpenChange={(open) => {
+          setIsStatementOpen(open);
+          if (!open) {
+            try {
+              sessionStorage.removeItem(STATEMENT_VIEW_STORAGE_KEY);
+            } catch {
+              // ignore
+            }
+          }
+        }}
       >
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto pr-2 patient-statement-print !bg-white !text-slate-900 !border-0">
           <DialogHeader>
@@ -1683,8 +1816,15 @@ export default function Patients() {
           <DialogFooter className="no-print">
             <Button
               variant="outline"
-              className="bg-white text-slate-900 border-slate-300 hover:bg-slate-50"
-              onClick={() => setIsStatementOpen(false)}
+              className="bg-white text-slate-900 border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+              onClick={() => {
+                setIsStatementOpen(false);
+                try {
+                  sessionStorage.removeItem(STATEMENT_VIEW_STORAGE_KEY);
+                } catch {
+                  // ignore
+                }
+              }}
             >
               Close
             </Button>
@@ -1730,26 +1870,28 @@ export default function Patients() {
               </div>
 
               {(selectedPatient.allergies || selectedPatient.medical_conditions || selectedPatient.current_medications) && (
-                <div className="p-4 bg-muted/50 rounded-lg space-y-2">
-                  <h4 className="font-medium text-sm">Medical Info</h4>
-                  {selectedPatient.allergies && (
-                    <div className="text-sm">
-                      <span className="text-destructive font-medium">Allergies: </span>
-                      {selectedPatient.allergies}
-                    </div>
-                  )}
-                  {selectedPatient.medical_conditions && (
-                    <div className="text-sm">
-                      <span className="font-medium">Conditions: </span>
-                      {selectedPatient.medical_conditions}
-                    </div>
-                  )}
-                  {selectedPatient.current_medications && (
-                    <div className="text-sm">
-                      <span className="font-medium">Current medications: </span>
-                      {selectedPatient.current_medications}
-                    </div>
-                  )}
+                <div className="rounded-lg border bg-card p-4">
+                  <h4 className="text-sm font-semibold text-foreground">Medical Info</h4>
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {selectedPatient.allergies && (
+                      <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2">
+                        <div className="text-xs font-semibold text-destructive">Allergies</div>
+                        <div className="mt-1 text-sm text-foreground break-words">{selectedPatient.allergies}</div>
+                      </div>
+                    )}
+                    {selectedPatient.medical_conditions && (
+                      <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+                        <div className="text-xs font-semibold text-amber-700 dark:text-amber-300">Conditions</div>
+                        <div className="mt-1 text-sm text-foreground break-words">{selectedPatient.medical_conditions}</div>
+                      </div>
+                    )}
+                    {selectedPatient.current_medications && (
+                      <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
+                        <div className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Current medications</div>
+                        <div className="mt-1 text-sm text-foreground break-words">{selectedPatient.current_medications}</div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1832,7 +1974,7 @@ export default function Patients() {
                         )}
                       >
                         <div className="text-xs uppercase tracking-wide text-muted-foreground">Outstanding Balance</div>
-                        <div className={cn('mt-1 text-2xl font-semibold', runningBalance > 0 ? 'text-destructive' : 'text-slate-900')}>
+                        <div className={cn('mt-1 text-2xl font-semibold', runningBalance > 0 ? 'text-destructive' : 'text-foreground')}>
                           Rs. {runningBalance.toLocaleString()}
                         </div>
                       </div>
@@ -2120,7 +2262,7 @@ export default function Patients() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => setIsStatementOpen(true)}
+                  onClick={openStatementDialog}
                 >
                   View Statement
                 </Button>
@@ -2141,12 +2283,24 @@ export default function Patients() {
         open={isInvoiceViewOpen}
         onOpenChange={(open) => {
           setIsInvoiceViewOpen(open);
-          if (!open) setSelectedInvoiceForView(null);
+          if (!open) {
+            setSelectedInvoiceForView(null);
+            try {
+              sessionStorage.removeItem(INVOICE_VIEW_STORAGE_KEY);
+            } catch {
+              // ignore
+            }
+          }
         }}
         invoice={selectedInvoiceForView}
         onUpdatePayment={(inv) => {
           setIsInvoiceViewOpen(false);
           setSelectedInvoiceForView(null);
+          try {
+            sessionStorage.removeItem(INVOICE_VIEW_STORAGE_KEY);
+          } catch {
+            // ignore
+          }
           openPaymentDialog(inv);
         }}
         onUpdateDiscount={handleInvoiceDiscountUpdate}
@@ -2166,7 +2320,7 @@ export default function Patients() {
           }
         }}
       >
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto z-[60]">
           <DialogHeader>
             <DialogTitle>Create Invoice</DialogTitle>
             <DialogDescription>
