@@ -2345,7 +2345,7 @@ export default function Patients() {
                       value={item.description}
                       onValueChange={(v) => {
                         if (v === '__manage_services__') {
-                          setIsServicesDialogOpen(true);
+                          setTimeout(() => setIsServicesDialogOpen(true), 0);
                           return;
                         }
                         const treatment = treatmentTypes.find((t) => t.name === v);
@@ -2664,7 +2664,7 @@ export default function Patients() {
 
       {/* Services (Treatment Types) Management Dialog */}
       <Dialog open={isServicesDialogOpen} onOpenChange={setIsServicesDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent overlayClassName="z-[70]" className="max-w-2xl max-h-[80vh] overflow-y-auto z-[80]">
           <DialogHeader>
             <DialogTitle>Manage Services</DialogTitle>
             <DialogDescription>
