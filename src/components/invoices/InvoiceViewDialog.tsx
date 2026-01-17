@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Invoice } from '@/types';
 import { cn } from '@/lib/utils';
-import { CreditCard, Pencil, Printer, Save, X } from 'lucide-react';
+import { CreditCard, Pencil, Save, X } from 'lucide-react';
 
 export function InvoiceViewDialog({
   open,
@@ -243,10 +243,6 @@ export function InvoiceViewDialog({
                 </>
               ) : (
                 <>
-                  <Button variant="outline" className="flex-1 h-11">
-                    <Printer className="h-4 w-4 mr-2" />
-                    Print
-                  </Button>
                   {canUpdatePayment && onUpdatePayment && (
                     <Button className="flex-1 h-11" onClick={() => onUpdatePayment(localInvoice)}>
                       <CreditCard className="h-4 w-4 mr-2" />
