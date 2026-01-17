@@ -25,6 +25,18 @@ export function InvoiceViewDialog({
   const [isSavingDiscount, setIsSavingDiscount] = useState(false);
   const [localInvoice, setLocalInvoice] = useState<Invoice | null>(null);
 
+  const handlePrint = () => {
+    if (!localInvoice) return;
+
+    const cleanup = () => {
+      document.body.classList.remove('printing-invoice');
+    };
+
+    document.body.classList.add('printing-invoice');
+    window.addEventListener('afterprint', cleanup, { once: true });
+    window.print();
+  };
+
   useEffect(() => {
     if (!open) {
       setIsEditingDiscount(false);
@@ -86,7 +98,7 @@ export function InvoiceViewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto invoice-print z-[60]">
         <DialogHeader className="pb-6 border-b border-border">
           <DialogTitle className="text-2xl font-bold text-foreground">
             Invoice {localInvoice?.invoice_number}

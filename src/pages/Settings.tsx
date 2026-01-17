@@ -290,15 +290,6 @@ export default function Settings() {
                 <CardDescription>Update your personal information</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center gap-6">
-                  <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center text-primary text-2xl font-bold">
-                    {profileInitials}
-                  </div>
-                  <div>
-                    <Button variant="outline">Change Photo</Button>
-                    <p className="text-sm text-muted-foreground mt-1">JPG or PNG. Max 2MB.</p>
-                  </div>
-                </div>
                 <div className="grid grid-cols-1 gap-4 max-w-xl">
                   <div>
                     <label className="form-label">First Name</label>
