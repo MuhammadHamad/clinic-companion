@@ -7,6 +7,14 @@ import { Badge } from '@/components/ui/badge';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  InventoryStatsCards,
+  InventoryTable,
+  DeleteItemDialog,
+  DeleteCategoryDialog,
+  CategoryManagementDialog,
+  DuplicateItemDialog,
+} from '@/components/inventory';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -1246,73 +1254,24 @@ export default function Inventory() {
         <Header title="Inventory" subtitle="Manage your stock and supplies" />
       
       <div className="p-4 sm:p-6 space-y-6 animate-fade-in">
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent 
-              className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4 cursor-pointer hover:bg-muted/50 transition-colors"
-              onClick={() => {
-                setStatusFilter('all');
-                setCategoryFilter('all');
-                setSearchQuery('');
-              }}
-            >
-              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Package className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm text-muted-foreground">Total Items</p>
-                <p className="text-lg sm:text-xl font-bold">{stats.total}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className={stats.low_stock > 0 ? 'border-warning/50' : ''}>
-            <CardContent 
-              className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4 cursor-pointer hover:bg-muted/50 transition-colors"
-              onClick={() => setStatusFilter(statusFilter === 'low_stock' ? 'all' : 'low_stock')}
-            >
-              <div className="h-10 w-10 rounded-lg bg-warning/10 flex items-center justify-center">
-                <AlertTriangle className="h-5 w-5 text-warning" />
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm text-muted-foreground">Low Stock</p>
-                <p className="text-lg sm:text-xl font-bold text-warning">{stats.low_stock}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className={stats.out_of_stock > 0 ? 'border-destructive/50' : ''}>
-            <CardContent 
-              className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4 cursor-pointer hover:bg-muted/50 transition-colors"
-              onClick={() => setStatusFilter(statusFilter === 'out_of_stock' ? 'all' : 'out_of_stock')}
-            >
-              <div className="h-10 w-10 rounded-lg bg-destructive/10 flex items-center justify-center">
-                <AlertTriangle className="h-5 w-5 text-destructive" />
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm text-muted-foreground">Out of Stock</p>
-                <p className="text-lg sm:text-xl font-bold text-destructive">{stats.out_of_stock}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent 
-              className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4 cursor-pointer hover:bg-muted/50 transition-colors"
-              onClick={() => {
-                setStatusFilter('all');
-                setCategoryFilter('all');
-                setSearchQuery('');
-              }}
-            >
-              <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center">
-                <Package className="h-5 w-5 text-success" />
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm text-muted-foreground">Total Value</p>
-                <p className="text-lg sm:text-xl font-bold">Rs. {stats.total_value.toLocaleString()}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <InventoryStatsCards
+          totalItems={stats.total}
+          lowStockCount={stats.low_stock}
+          outOfStockCount={stats.out_of_stock}
+          totalValue={stats.total_value}
+          onTotalClick={() => {
+            setStatusFilter('all');
+            setCategoryFilter('all');
+            setSearchQuery('');
+          }}
+          onLowStockClick={() => setStatusFilter(statusFilter === 'low_stock' ? 'all' : 'low_stock')}
+          onOutOfStockClick={() => setStatusFilter(statusFilter === 'out_of_stock' ? 'all' : 'out_of_stock')}
+          onValueClick={() => {
+            setStatusFilter('all');
+            setCategoryFilter('all');
+            setSearchQuery('');
+          }}
+        />
 
         {/* Actions Bar */}
         <div className="inventory-actions-bar flex flex-col gap-4">
