@@ -2510,48 +2510,19 @@ export default function Patients() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog
+      <ArchivePatientDialog
         open={isDeleteOpen}
         onOpenChange={(open) => {
           if (isDeleting) return;
           setIsDeleteOpen(open);
           if (!open) setPatientToDelete(null);
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Archive Customer</AlertDialogTitle>
-            <AlertDialogDescription>
-              {patientToDelete
-                ? `Are you sure you want to archive customer ${patientToDelete.first_name} ${patientToDelete.last_name}? The customer will be moved to the archived section and can be restored later.`
-                : 'Are you sure you want to archive this customer? The customer will be moved to the archived section and can be restored later.'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={isDeleting || !patientToDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={(e) => {
-                e.preventDefault();
-                confirmArchivePatient();
-              }}
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Archiving...
-                </>
-              ) : (
-                'Archive Customer'
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        patient={patientToDelete}
+        isArchiving={isDeleting}
+        onConfirm={confirmArchivePatient}
+      />
 
-      {/* Duplicate Patient Confirmation Modal */}
-      <Dialog
+      <DuplicatePatientDialog
         open={duplicateModalOpen}
         onOpenChange={(open) => {
           setDuplicateModalOpen(open);
@@ -2560,80 +2531,22 @@ export default function Patients() {
             setDuplicatePatientWarningForPhone(null);
           }
         }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Possible Duplicate Customer</DialogTitle>
-            <DialogDescription>
-              A customer with this phone number already exists in the system.
-            </DialogDescription>
-          </DialogHeader>
-          
-          {duplicatePatientInfo && (
-            <div className="p-4 bg-muted/50 rounded-lg space-y-2">
-              <h4 className="font-medium text-sm">Existing Customer:</h4>
-              <div className="text-sm space-y-1">
-                <div><span className="font-medium">Name:</span> {duplicatePatientInfo.first_name} {duplicatePatientInfo.last_name}</div>
-                <div><span className="font-medium">Phone:</span> {duplicatePatientInfo.phone}</div>
-                <div><span className="font-medium">Customer ID:</span> {duplicatePatientInfo.patient_number}</div>
-                {duplicatePatientInfo.email && (
-                  <div><span className="font-medium">Email:</span> {duplicatePatientInfo.email}</div>
-                )}
-              </div>
-            </div>
-          )}
+        duplicatePatient={duplicatePatientInfo}
+        onViewExisting={handleDuplicateCancel}
+        onCreateAnyway={handleDuplicateConfirm}
+      />
 
-          <div className="text-sm text-muted-foreground">
-            If this is the same person, consider opening their existing record instead of creating a duplicate.
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={handleDuplicateCancel}>
-              Cancel
-            </Button>
-            <Button onClick={handleDuplicateConfirm}>
-              Create Anyway
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Restore Patient Confirmation Modal */}
-      <Dialog
+      <RestorePatientDialog
         open={isRestoreOpen}
         onOpenChange={(open) => {
           if (isRestoring) return;
           setIsRestoreOpen(open);
           if (!open) setPatientToRestore(null);
         }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Restore Customer</DialogTitle>
-            <DialogDescription>
-              {patientToRestore
-                ? `Are you sure you want to restore customer ${patientToRestore.first_name} ${patientToRestore.last_name}? The customer will be moved back to active status and can be edited again.`
-                : 'Are you sure you want to restore this customer? The customer will be moved back to active status and can be edited again.'}
-            </DialogDescription>
-          </DialogHeader>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsRestoreOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={confirmRestorePatient} disabled={isRestoring}>
-              {isRestoring ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Restoring...
-                </>
-              ) : (
-                'Restore Customer'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        patient={patientToRestore}
+        isRestoring={isRestoring}
+        onConfirm={confirmRestorePatient}
+      />
 
       {/* Services (Treatment Types) Management Dialog */}
       <Dialog open={isServicesDialogOpen} onOpenChange={setIsServicesDialogOpen}>

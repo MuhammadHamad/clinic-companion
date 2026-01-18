@@ -1780,190 +1780,52 @@ export default function Inventory() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog
+      <DeleteItemDialog
         open={isDeleteOpen}
         onOpenChange={(open) => {
           if (isDeleting) return;
           setIsDeleteOpen(open);
           if (!open) setItemToDelete(null);
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete item</AlertDialogTitle>
-            <AlertDialogDescription>
-              {itemToDelete
-                ? `Are you sure you want to delete item ${itemToDelete.item_name}? This action cannot be undone.`
-                : 'Are you sure you want to delete this item? This action cannot be undone.'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={isDeleting || !itemToDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={(e) => {
-                e.preventDefault();
-                confirmDeleteItem();
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        item={itemToDelete}
+        isDeleting={isDeleting}
+        onConfirm={confirmDeleteItem}
+      />
 
-      {/* Category Management Dialog */}
-      <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Manage Categories</DialogTitle>
-            <DialogDescription>
-              Create new inventory categories for your clinic
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            {categories.length > 0 && (
-              <div>
-                <h4 className="text-sm font-medium mb-2">Existing Categories</h4>
-                <div className="space-y-1">
-                  {categories.map(cat => (
-                    <div key={cat.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
-                      <div className="flex-1">
-                        <span className="text-sm font-medium">{cat.name}</span>
-                        {cat.description && (
-                          <p className="text-xs text-muted-foreground">{cat.description}</p>
-                        )}
-                      </div>
-                      <div className="flex gap-1">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openEditCategory(cat)}
-                              className="h-8 w-8"
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Edit</p>
-                          </TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openDeleteCategoryDialog(cat)}
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Delete</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            <div className="border-t pt-4">
-              <h4 className="text-sm font-medium mb-2">
-                {editingCategory ? 'Edit Category' : 'Create New Category'}
-              </h4>
-              <form onSubmit={editingCategory ? handleUpdateCategory : handleCreateCategory} className="space-y-3">
-                <div>
-                  <label className="form-label">Category Name *</label>
-                  <Input
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    placeholder="e.g., Instruments, Materials, Consumables"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Description</label>
-                  <Textarea
-                    value={newCategoryDescription}
-                    onChange={(e) => setNewCategoryDescription(e.target.value)}
-                    placeholder="Optional description"
-                    rows={2}
-                  />
-                </div>
-              </form>
-            </div>
-          </div>
+      <CategoryManagementDialog
+        open={isCategoryDialogOpen}
+        onOpenChange={setIsCategoryDialogOpen}
+        categories={categories}
+        editingCategory={editingCategory}
+        categoryName={newCategoryName}
+        categoryDescription={newCategoryDescription}
+        onCategoryNameChange={setNewCategoryName}
+        onCategoryDescriptionChange={setNewCategoryDescription}
+        onEditCategory={openEditCategory}
+        onDeleteCategory={openDeleteCategoryDialog}
+        onSubmit={editingCategory ? handleUpdateCategory : handleCreateCategory}
+        onCancel={() => {
+          setIsCategoryDialogOpen(false);
+          setEditingCategory(null);
+          setNewCategoryName('');
+          setNewCategoryDescription('');
+        }}
+        isSubmitting={isCreatingCategory}
+      />
 
-          <DialogFooter>
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={() => {
-                setIsCategoryDialogOpen(false);
-                setEditingCategory(null);
-                setNewCategoryName('');
-                setNewCategoryDescription('');
-              }}
-            >
-              Cancel
-            </Button>
-            <Button 
-              type="submit"
-              onClick={editingCategory ? handleUpdateCategory : handleCreateCategory}
-              disabled={!newCategoryName.trim() || isCreatingCategory}
-            >
-              {isCreatingCategory 
-                ? (editingCategory ? 'Updating...' : 'Creating...')
-                : (editingCategory ? 'Update Category' : 'Create Category')
-              }
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Category Delete Confirmation Dialog */}
-      <AlertDialog
+      <DeleteCategoryDialog
         open={isDeleteCategoryOpen}
         onOpenChange={(open) => {
           if (isDeletingCategory) return;
           setIsDeleteCategoryOpen(open);
           if (!open) setCategoryToDelete(null);
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete category</AlertDialogTitle>
-            <AlertDialogDescription>
-              {categoryToDelete
-                ? `Are you sure you want to delete category "${categoryToDelete.name}"? This action cannot be undone.`
-                : 'Are you sure you want to delete this category? This action cannot be undone.'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeletingCategory}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={isDeletingCategory || !categoryToDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={(e) => {
-                e.preventDefault();
-                confirmDeleteCategory();
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        category={categoryToDelete}
+        isDeleting={isDeletingCategory}
+        onConfirm={confirmDeleteCategory}
+      />
 
-      {/* Duplicate Item Confirmation Modal */}
-      <Dialog
+      <DuplicateItemDialog
         open={duplicateModalOpen}
         onOpenChange={(open) => {
           setDuplicateModalOpen(open);
@@ -1972,44 +1834,10 @@ export default function Inventory() {
             setDuplicateItemWarningKey(null);
           }
         }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Possible Duplicate Item</DialogTitle>
-            <DialogDescription>
-              An item with the same name, category, and unit of measure already exists.
-            </DialogDescription>
-          </DialogHeader>
-          
-          {duplicateItemInfo && (
-            <div className="p-4 bg-muted/50 rounded-lg space-y-2">
-              <h4 className="font-medium text-sm">Existing Item:</h4>
-              <div className="text-sm space-y-1">
-                <div><span className="font-medium">Name:</span> {duplicateItemInfo.item_name}</div>
-                <div><span className="font-medium">Category:</span> {duplicateItemInfo.category?.name || '-'}</div>
-                <div><span className="font-medium">Unit:</span> {duplicateItemInfo.unit_of_measure}</div>
-                <div><span className="font-medium">Current Quantity:</span> {duplicateItemInfo.current_quantity}</div>
-                {duplicateItemInfo.unit_cost && (
-                  <div><span className="font-medium">Unit Cost:</span> Rs. {duplicateItemInfo.unit_cost.toLocaleString()}</div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div className="text-sm text-muted-foreground">
-            If this represents the same product, consider updating its quantity instead of creating a new item.
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={handleDuplicateCancel}>
-              Cancel
-            </Button>
-            <Button onClick={handleDuplicateConfirm}>
-              Create Anyway
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        duplicateItem={duplicateItemInfo}
+        onViewExisting={handleDuplicateCancel}
+        onCreateAnyway={handleDuplicateConfirm}
+      />
 
       <Dialog
         open={isSupplierLedgerOpen}
