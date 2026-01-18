@@ -5,8 +5,8 @@ import { Header } from '@/components/layout/Header';
 import { 
   Plus, 
   Search, 
-  Eye, 
-  Pencil, 
+  Eye,
+  Pencil,
   Phone, 
   Mail,
   Calendar,
@@ -21,6 +21,17 @@ import {
   ArchiveX,
   RotateCcw,
 } from 'lucide-react';
+import {
+  PatientStatsCards,
+  PatientFormDialog,
+  PaymentDialog,
+  PatientsTable,
+  ArchivePatientDialog,
+  RestorePatientDialog,
+  DuplicatePatientDialog,
+  type PatientFormData as PatientFormDialogData,
+  type PaymentFormData,
+} from '@/components/patients';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -170,6 +181,7 @@ export default function Patients() {
     fetchInvoiceById,
   } = useInvoices({ autoFetch: false });
   const { treatmentTypes, createTreatmentType, updateTreatmentType, deleteTreatmentType } = useTreatmentTypes();
+  const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
@@ -1182,52 +1194,12 @@ export default function Patients() {
         <Header title="Customers" subtitle="Manage your customer records" />
       
       <div className="p-4 sm:p-6 space-y-6 animate-fade-in">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <Card>
-            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
-              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Plus className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm text-muted-foreground">Total Customers</p>
-                <p className="text-lg sm:text-xl font-bold">{patientsStats.total}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
-              <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center">
-                <ArchiveRestore className="h-5 w-5 text-success" />
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm text-muted-foreground">Active</p>
-                <p className="text-lg sm:text-xl font-bold">{patientsStats.active}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
-              <div className="h-10 w-10 rounded-lg bg-warning/10 flex items-center justify-center">
-                <Calendar className="h-5 w-5 text-warning" />
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm text-muted-foreground">New This Month</p>
-                <p className="text-lg sm:text-xl font-bold">{patientsStats.newThisMonth}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
-              <div className="h-10 w-10 rounded-lg bg-financial-unpaid/10 flex items-center justify-center">
-                <DollarSign className="h-5 w-5 text-financial-unpaid" />
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm text-muted-foreground">Outstanding</p>
-                <p className="text-lg sm:text-xl font-bold">Rs. {totalOutstanding.toLocaleString()}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <PatientStatsCards
+          total={patientsStats.total}
+          active={patientsStats.active}
+          newThisMonth={patientsStats.newThisMonth}
+          totalOutstanding={totalOutstanding}
+        />
 
         {/* Actions Bar */}
         <div className="patients-actions-bar flex flex-col gap-4">
