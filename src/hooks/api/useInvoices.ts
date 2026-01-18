@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { Invoice, InvoiceItem, InvoiceStatus, Patient, PaymentMethod } from '@/types';
@@ -13,6 +13,9 @@ type UseInvoicesOptions = {
 export function useInvoices(options?: UseInvoicesOptions) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const hasLoadedOnceRef = useRef(false);
   const { toast } = useToast();
   const autoFetch = options?.autoFetch ?? true;
 
@@ -57,7 +60,13 @@ export function useInvoices(options?: UseInvoicesOptions) {
 
   const fetchInvoices = useCallback(async () => {
     try {
-      setIsLoading(true);
+      const isInitialLoad = !hasLoadedOnceRef.current;
+      if (isInitialLoad) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+
       const { data, error } = await supabase
         .from('invoices')
         .select(`
@@ -70,6 +79,8 @@ export function useInvoices(options?: UseInvoicesOptions) {
       if (error) throw error;
 
       setInvoices((data || []).map(mapRowToInvoice));
+      setLastUpdated(new Date());
+      hasLoadedOnceRef.current = true;
     } catch (error: any) {
       logger.error('Error fetching invoices:', error);
       toast({
@@ -79,6 +90,7 @@ export function useInvoices(options?: UseInvoicesOptions) {
       });
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   }, [toast]);
 
@@ -445,6 +457,8 @@ export function useInvoices(options?: UseInvoicesOptions) {
   return {
     invoices,
     isLoading,
+    isRefreshing,
+    lastUpdated,
     fetchInvoices,
     fetchInvoiceSummariesByPatientIds,
     fetchInvoicesForPatient,

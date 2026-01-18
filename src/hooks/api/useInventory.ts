@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { InventoryItem, InventoryCategory, InventoryStatus, MovementType, StockMovement } from '@/types';
@@ -17,6 +17,9 @@ export function useInventory() {
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const hasLoadedOnceRef = useRef(false);
   const { toast } = useToast();
 
   // Server-side pagination state
@@ -149,7 +152,13 @@ export function useInventory() {
 
   const fetchItems = useCallback(async () => {
     try {
-      setIsLoading(true);
+      const isInitialLoad = !hasLoadedOnceRef.current;
+      if (isInitialLoad) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+
       const { data, error } = await supabase
         .from('inventory_items')
         .select(`
@@ -161,6 +170,8 @@ export function useInventory() {
       if (error) throw error;
 
       setItems((data || []).map(mapRowToItem));
+      setLastUpdated(new Date());
+      hasLoadedOnceRef.current = true;
     } catch (error: any) {
       logger.error('Error fetching inventory:', error);
       toast({
@@ -170,6 +181,7 @@ export function useInventory() {
       });
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   }, [toast]);
 
@@ -598,6 +610,8 @@ export function useInventory() {
     categories,
     movements,
     isLoading,
+    isRefreshing,
+    lastUpdated,
     fetchItems,
     fetchCategories,
     fetchMovements,

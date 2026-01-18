@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Header } from '@/components/layout/Header';
 import { 
   Plus, 
@@ -464,6 +465,13 @@ export default function Patients() {
 
   const currentPagePatients = pagedPatients;
 
+  const refreshCurrentPageInvoiceSummaries = useCallback(async () => {
+    const ids = currentPagePatients.map((p) => p.id);
+    const res = await fetchInvoiceSummariesByPatientIds(ids);
+    if (!res.success) return;
+    setInvoiceSummariesByPatientId(res.data);
+  }, [currentPagePatients, fetchInvoiceSummariesByPatientIds]);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const q = params.get('q');
@@ -504,20 +512,8 @@ export default function Patients() {
   }, [refreshOutstandingTotal]);
 
   useEffect(() => {
-    const ids = currentPagePatients.map((p) => p.id);
-    let cancelled = false;
-
-    (async () => {
-      const res = await fetchInvoiceSummariesByPatientIds(ids);
-      if (!res.success) return;
-      if (cancelled) return;
-      setInvoiceSummariesByPatientId(res.data);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentPagePatients, fetchInvoiceSummariesByPatientIds]);
+    refreshCurrentPageInvoiceSummaries();
+  }, [refreshCurrentPageInvoiceSummaries]);
 
   // Pagination calculations (server-side)
   const totalPatients = pagedTotalCount;
@@ -610,13 +606,13 @@ export default function Patients() {
   };
 
   const refreshSelectedPatientInvoices = useCallback(
-    async (patientId: string) => {
-      setIsLoadingSelectedPatientInvoices(true);
+    async (patientId: string, silent = false) => {
+      if (!silent) setIsLoadingSelectedPatientInvoices(true);
       const res = await fetchInvoicesForPatient(patientId);
       if (res.success) {
         setSelectedPatientInvoices(res.data);
       }
-      setIsLoadingSelectedPatientInvoices(false);
+      if (!silent) setIsLoadingSelectedPatientInvoices(false);
     },
     [fetchInvoicesForPatient],
   );
@@ -689,9 +685,9 @@ export default function Patients() {
     }
   }, [location.search, currentPagePatients, isViewOpen, selectedPatient]);
 
-  const loadPatientPayments = async (patientId: string) => {
+  const loadPatientPayments = async (patientId: string, silent = false) => {
     try {
-      setIsLoadingPayments(true);
+      if (!silent) setIsLoadingPayments(true);
       const { data, error } = await supabase
         .from('payments')
         .select('*')
@@ -716,7 +712,7 @@ export default function Patients() {
     } catch (err) {
       logger.error('Error fetching patient payments:', err);
     } finally {
-      setIsLoadingPayments(false);
+      if (!silent) setIsLoadingPayments(false);
     }
   };
 
@@ -872,9 +868,12 @@ export default function Patients() {
           // ignore
         }
         await refreshOutstandingTotal();
+        await refreshCurrentPageInvoiceSummaries();
         if (selectedPatient) {
           await refreshSelectedPatientInvoices(selectedPatient.id);
         }
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+        queryClient.refetchQueries({ queryKey: ['dashboard'], type: 'active' });
       } else {
         toast({ title: 'Error', description: result.error || 'Failed to create invoice', variant: 'destructive' });
       }
@@ -929,9 +928,11 @@ export default function Patients() {
         title: 'Payment Updated',
         description: 'Payment has been updated successfully',
       });
-      await loadPatientPayments(selectedPatient.id);
+      await loadPatientPayments(selectedPatient.id, true);
       await refreshOutstandingTotal();
-      await refreshSelectedPatientInvoices(selectedPatient.id);
+      await refreshCurrentPageInvoiceSummaries();
+      await refreshSelectedPatientInvoices(selectedPatient.id, true);
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     } else {
       toast({
         title: 'Error',

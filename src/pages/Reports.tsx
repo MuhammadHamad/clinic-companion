@@ -22,6 +22,7 @@ import {
   TrendingUp,
   AlertTriangle,
   Package,
+  RefreshCw,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useInvoices, useInventory, usePatients } from '@/hooks';
@@ -32,11 +33,17 @@ import { useTenant } from '@/contexts/TenantContext';
 const COLORS = ['hsl(217, 91%, 60%)', 'hsl(160, 84%, 39%)', 'hsl(38, 92%, 50%)', 'hsl(280, 65%, 60%)', 'hsl(340, 75%, 55%)'];
 
 export default function Reports() {
-  const { invoices } = useInvoices();
-  const { items } = useInventory();
-  const { patients } = usePatients();
+  const { invoices, fetchInvoices, lastUpdated: invoicesLastUpdated } = useInvoices();
+  const { items, fetchItems, fetchCategories, fetchMovements, lastUpdated: inventoryLastUpdated } = useInventory();
+  const { patients, fetchPatients, lastUpdated: patientsLastUpdated } = usePatients();
   const { activeClinic } = useTenant();
   const [activeTab, setActiveTab] = useState<'revenue' | 'outstanding' | 'inventory'>('revenue');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(() => {
+    // Initialize with the most recent timestamp from hooks
+    const timestamps = [invoicesLastUpdated, inventoryLastUpdated, patientsLastUpdated].filter(Boolean);
+    return timestamps.length > 0 ? new Date(Math.max(...timestamps.map(d => d!.getTime()))) : null;
+  });
   const [dateRange, setDateRange] = useState({
     start: new Date(new Date().setDate(1)).toISOString().split('T')[0], // First day of month
     end: new Date().toISOString().split('T')[0], // Today
@@ -72,6 +79,31 @@ export default function Reports() {
       invoiceCount: invoiceIds.size,
     };
   }, [paymentsInRange]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.allSettled([
+        fetchInvoices(),
+        fetchPatients(),
+        fetchItems(),
+        fetchCategories(),
+        fetchMovements(),
+      ]);
+      setLastUpdated(new Date());
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Update lastUpdated when any of the hooks' data is refreshed
+  useEffect(() => {
+    const timestamps = [invoicesLastUpdated, inventoryLastUpdated, patientsLastUpdated].filter(Boolean);
+    if (timestamps.length > 0) {
+      const latest = new Date(Math.max(...timestamps.map(d => d!.getTime())));
+      setLastUpdated(latest);
+    }
+  }, [invoicesLastUpdated, inventoryLastUpdated, patientsLastUpdated]);
 
   // Invoices filtered by selected invoice_date range (excluding void)
   const invoicesInRange = useMemo(() => {
@@ -539,6 +571,26 @@ export default function Reports() {
       <Header title="Reports" subtitle="View analytics and generate reports" />
       
       <div className="p-4 sm:p-6 animate-fade-in overflow-x-hidden">
+        <div className="flex items-center justify-end gap-3">
+          {lastUpdated && (
+            <span className="text-xs text-muted-foreground">
+              Updated {lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+            </span>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn(
+              'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 hover:text-primary',
+            )}
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={cn('h-4 w-4 mr-2', isRefreshing && 'animate-spin')} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
+        </div>
+
         <Tabs defaultValue="revenue" className="space-y-6" onValueChange={(v) => setActiveTab(v as any)}>
           <div className="flex flex-col gap-4">
             <div className="overflow-x-auto">

@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { DashboardStats, Appointment, AppointmentStatus, Patient } from '@/types';
 import { useToast } from '@/hooks';
 
 export function useDashboard() {
-  const [stats, setStats] = useState<DashboardStats>({
+  const defaultStats: DashboardStats = {
     today: {
       revenue: 0,
       appointments_scheduled: 0,
@@ -27,15 +28,11 @@ export function useDashboard() {
       low_stock_count: 0,
       overdue_invoices_count: 0,
     },
-  });
-  const [todayAppointments, setTodayAppointments] = useState<Appointment[]>([]);
-  const [revenueData, setRevenueData] = useState<{ day: string; revenue: number }[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  };
   const { toast } = useToast();
 
   const fetchDashboardData = useCallback(async () => {
     try {
-      setIsLoading(true);
       const today = new Date().toISOString().split('T')[0];
       const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
       const startOfYear = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
@@ -171,8 +168,6 @@ export function useDashboard() {
         } as Patient : undefined,
       }));
 
-      setTodayAppointments(mappedAppointments);
-
       // Process other data
       const todayRevenue = (todayPaymentsResult.data || []).reduce((sum, p) => sum + Number(p.amount), 0);
       const monthRevenue = (monthPaymentsResult.data || []).reduce((sum, p) => sum + Number(p.amount), 0);
@@ -209,7 +204,7 @@ export function useDashboard() {
       ).length;
       const completed = mappedAppointments.filter(a => a.status === 'completed').length;
 
-      setStats({
+      const stats: DashboardStats = {
         today: {
           revenue: todayRevenue,
           appointments_scheduled: scheduledOrConfirmed,
@@ -231,7 +226,7 @@ export function useDashboard() {
           low_stock_count: lowStockResult.count || 0,
           overdue_invoices_count: overdueResult.count || 0,
         },
-      });
+      };
 
       // Process chart data
       const last7Days = [];
@@ -253,7 +248,11 @@ export function useDashboard() {
         };
       });
 
-      setRevenueData(chartData);
+      return {
+        stats,
+        todayAppointments: mappedAppointments,
+        revenueData: chartData,
+      };
     } catch (error: any) {
       logger.error('Error fetching dashboard data:', error);
       toast({
@@ -261,20 +260,36 @@ export function useDashboard() {
         description: 'Failed to fetch dashboard data',
         variant: 'destructive',
       });
+      throw error;
     } finally {
-      setIsLoading(false);
     }
   }, [toast]);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  const query = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: async () => {
+      const result = await fetchDashboardData();
+      setLastUpdated(new Date());
+      return result;
+    },
+    placeholderData: (prev) => prev,
+    refetchOnMount: 'always',
+    staleTime: 0,
+  });
+
+  const handleRefresh = useCallback(async () => {
+    await query.refetch();
+  }, [query]);
 
   return {
-    stats,
-    todayAppointments,
-    revenueData,
-    isLoading,
-    fetchDashboardData,
+    stats: query.data?.stats ?? defaultStats,
+    todayAppointments: query.data?.todayAppointments ?? [],
+    revenueData: query.data?.revenueData ?? [],
+    isLoading: query.isLoading && !query.data,
+    isRefreshing: query.isFetching && !!query.data,
+    lastUpdated,
+    refresh: handleRefresh,
   };
 }

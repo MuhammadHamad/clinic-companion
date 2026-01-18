@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useMemo } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { useAuth } from '@/contexts/AuthContext';
@@ -52,6 +52,8 @@ function writeClinicNameCache(next: Record<string, string>) {
 
 export function TenantProvider({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated } = useAuth();
+
+  const hasEverLoadedRoleRef = useRef(false);
 
   const [role, setRole] = useState<AppRole | null>(null);
   const [clinicId, setClinicId] = useState<string | null>(null);
@@ -132,12 +134,16 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       setClinics([]);
       setIsLoading(false);
       setHasLoadedRole(false);
+      hasEverLoadedRoleRef.current = false;
       setError(null);
       return null;
     }
 
-    setIsLoading(true);
-    setHasLoadedRole(false);
+    const isInitialLoad = !hasEverLoadedRoleRef.current;
+    if (isInitialLoad) {
+      setIsLoading(true);
+      setHasLoadedRole(false);
+    }
     setError(null);
 
     try {
@@ -196,6 +202,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
     setIsLoading(false);
     setHasLoadedRole(true);
+    hasEverLoadedRoleRef.current = true;
 
     return resolvedActiveClinicId;
   }, [applyCachedClinicName, user, isAuthenticated]);

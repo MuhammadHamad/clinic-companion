@@ -9,6 +9,7 @@ import {
   Clock,
   FileText,
   Package,
+  RefreshCw,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -28,7 +29,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function Dashboard() {
-  const { stats, todayAppointments, revenueData, isLoading } = useDashboard();
+  const { stats, todayAppointments, revenueData, isLoading, isRefreshing, lastUpdated, refresh } = useDashboard();
 
   // Use the trend from state directly so the bar aligns with the real current month index
   const monthlyTrendData = useMemo(
@@ -69,6 +70,26 @@ export default function Dashboard() {
       <Header title="Dashboard" subtitle="Welcome back! Here's what's happening today." />
       
       <div className="p-4 sm:p-6 space-y-6 animate-fade-in">
+        <div className="flex items-center justify-end gap-3">
+          {lastUpdated && (
+            <span className="text-xs text-muted-foreground">
+              Updated {lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+            </span>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn(
+              'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 hover:text-primary',
+            )}
+            onClick={refresh}
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={cn('h-4 w-4 mr-2', isRefreshing && 'animate-spin')} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
+        </div>
+
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="stat-card">

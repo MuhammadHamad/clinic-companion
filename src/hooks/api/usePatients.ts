@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { Patient } from '@/types';
@@ -14,6 +14,9 @@ type PatientsPageParams = {
 export function usePatients(options?: { autoFetch?: boolean }) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const hasLoadedOnceRef = useRef(false);
   const [pagedPatients, setPagedPatients] = useState<Patient[]>([]);
   const [pagedTotalCount, setPagedTotalCount] = useState<number>(0);
   const [isPageLoading, setIsPageLoading] = useState(false);
@@ -46,7 +49,13 @@ export function usePatients(options?: { autoFetch?: boolean }) {
 
   const fetchPatients = useCallback(async () => {
     try {
-      setIsLoading(true);
+      const isInitialLoad = !hasLoadedOnceRef.current;
+      if (isInitialLoad) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+
       const { data, error } = await supabase
         .from('patients')
         .select('*')
@@ -55,6 +64,8 @@ export function usePatients(options?: { autoFetch?: boolean }) {
       if (error) throw error;
 
       setPatients((data || []).map(mapRowToPatient));
+      setLastUpdated(new Date());
+      hasLoadedOnceRef.current = true;
     } catch (error: any) {
       logger.error('Error fetching patients:', error);
       toast({
@@ -64,6 +75,7 @@ export function usePatients(options?: { autoFetch?: boolean }) {
       });
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   }, [toast]);
 
@@ -263,6 +275,8 @@ export function usePatients(options?: { autoFetch?: boolean }) {
   return {
     patients,
     isLoading,
+    isRefreshing,
+    lastUpdated,
     pagedPatients,
     pagedTotalCount,
     isPageLoading,
