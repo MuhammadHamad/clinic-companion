@@ -18,9 +18,9 @@ export function SaasLayout() {
   } : null;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
       <SaasSidebar onLogout={handleLogout} user={userInfo} />
-      <main className="pl-64">
+      <main className="pl-0 lg:pl-64">
         <div className="min-h-screen">
           <Outlet />
         </div>

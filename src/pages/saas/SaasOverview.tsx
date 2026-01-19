@@ -76,7 +76,7 @@ export default function SaasOverview() {
     <div className="min-h-screen">
       <Header title="SaaS Overview" subtitle="Platform summary across all clinics" />
 
-      <div className="p-6 space-y-6 animate-fade-in">
+      <div className="p-4 sm:p-6 space-y-6 animate-fade-in max-w-screen-xl mx-auto">
         {warnings.length > 0 && (
           <Card className="border-warning/30 bg-warning/5">
             <CardHeader className="pb-2">
