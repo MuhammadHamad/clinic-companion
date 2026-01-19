@@ -67,7 +67,7 @@ export function PatientFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent overlayClassName="z-[60]" className="max-w-2xl max-h-[90vh] overflow-y-auto z-[70]">
         <DialogHeader>
           <DialogTitle>
             {mode === 'create' ? 'Add New Customer' : 'Edit Customer'}

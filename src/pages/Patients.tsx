@@ -189,6 +189,7 @@ export default function Patients() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [editingPatientId, setEditingPatientId] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [duplicatePatientWarningForPhone, setDuplicatePatientWarningForPhone] = useState<string | null>(null);
@@ -555,6 +556,7 @@ export default function Patients() {
 
   const openCreateForm = () => {
     setFormMode('create');
+    setEditingPatientId(null);
     setFormData({
       first_name: '',
       last_name: '',
@@ -577,8 +579,9 @@ export default function Patients() {
 
   const openEditForm = (patient: Patient) => {
     setFormMode('edit');
+    setEditingPatientId(patient.id);
     setSelectedPatient(patient);
-    setFormData({
+    const newFormData = {
       first_name: patient.first_name,
       last_name: patient.last_name,
       phone: patient.phone,
@@ -593,7 +596,8 @@ export default function Patients() {
       current_medications: patient.current_medications || '',
       medical_conditions: patient.medical_conditions || '',
       notes: patient.notes || '',
-    });
+    };
+    setFormData(newFormData);
     setDuplicatePatientWarningForPhone(null);
     setIsFormOpen(true);
   };
@@ -635,7 +639,8 @@ export default function Patients() {
 
     if (!viewPatientId) {
       if (isViewOpen) setIsViewOpen(false);
-      if (selectedPatient) setSelectedPatient(null);
+      // Don't clear the patient while editing, otherwise edit submit loses the ID.
+      if (!editingPatientId && selectedPatient) setSelectedPatient(null);
       return;
     }
 
@@ -1077,100 +1082,120 @@ export default function Patients() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validate form data with Zod
-    const validationResult = patientSchema.safeParse(formData);
-    if (!validationResult.success) {
-      const errorMessages = validationResult.error.errors.map(err => err.message).join('. ');
-      toast({
-        title: 'Validation Error',
-        description: errorMessages,
-        variant: 'destructive',
-      });
-      return;
-    }
 
-    if (formMode === 'create') {
-      const normalizedPhone = formData.phone.trim();
-      if (normalizedPhone && duplicatePatientWarningForPhone !== normalizedPhone) {
-        try {
-          const { data: existing, error } = await supabase
-            .from('patients')
-            .select('*')
-            .eq('phone', normalizedPhone)
-            .neq('status', 'archived')
-            .limit(1)
-            .maybeSingle();
-
-          if (error) throw error;
-          if (existing) {
-            const mapped = {
-              id: existing.id,
-              patient_number: existing.patient_number,
-              first_name: existing.first_name,
-              last_name: existing.last_name,
-              date_of_birth: existing.date_of_birth || undefined,
-              gender: existing.gender || undefined,
-              phone: existing.phone,
-              email: existing.email || undefined,
-              address: existing.address || undefined,
-              city: existing.city || undefined,
-              emergency_contact_name: existing.emergency_contact_name || undefined,
-              emergency_contact_phone: existing.emergency_contact_phone || undefined,
-              allergies: existing.allergies || undefined,
-              current_medications: existing.current_medications || undefined,
-              medical_conditions: existing.medical_conditions || undefined,
-              registration_date: existing.registration_date,
-              last_visit_date: existing.last_visit_date || undefined,
-              notes: existing.notes || undefined,
-              status: existing.status,
-              created_at: existing.created_at,
-              created_by: existing.created_by || undefined,
-              balance: existing.balance != null ? Number(existing.balance) : undefined,
-              archived_at: existing.archived_at || undefined,
-            } as Patient;
-
-            setDuplicatePatientWarningForPhone(normalizedPhone);
-            setDuplicatePatientInfo(mapped);
-            setDuplicateModalOpen(true);
-            return;
-          }
-        } catch (err) {
-          logger.error('Error checking duplicate patient phone:', err);
-        }
-      }
-    }
-
-    setIsSubmitting(true);
-
-    if (formMode === 'create') {
-      await createPatientFromForm();
-    } else if (selectedPatient) {
-      const result = await updatePatient(selectedPatient.id, {
-        ...formData,
-        gender: formData.gender as 'male' | 'female' | 'other' | undefined,
-      });
-
-      if (result.success) {
+    try {
+      // Validate form data with Zod
+      const validationResult = patientSchema.safeParse(formData);
+      if (!validationResult.success) {
+        const errorMessages = validationResult.error.errors.map(err => err.message).join('. ');
         toast({
-          title: 'Patient Updated',
-          description: 'Patient information has been updated successfully',
-        });
-        if (result.data) {
-          setSelectedPatient((prev) => (prev && prev.id === result.data!.id ? result.data! : prev));
-        }
-        fetchPatientsPage({ page: currentPage, pageSize, searchQuery, statusFilter });
-        setIsFormOpen(false);
-      } else {
-        toast({
-          title: 'Error',
-          description: result.error || 'Failed to update patient',
+          title: 'Validation Error',
+          description: errorMessages,
           variant: 'destructive',
         });
+        return;
       }
-    }
 
-    setIsSubmitting(false);
+      if (formMode === 'create') {
+        const normalizedPhone = formData.phone.trim();
+        if (normalizedPhone && duplicatePatientWarningForPhone !== normalizedPhone) {
+          try {
+            const { data: existing, error } = await supabase
+              .from('patients')
+              .select('*')
+              .eq('phone', normalizedPhone)
+              .neq('status', 'archived')
+              .limit(1)
+              .maybeSingle();
+
+            if (error) throw error;
+            if (existing) {
+              const mapped = {
+                id: existing.id,
+                patient_number: existing.patient_number,
+                first_name: existing.first_name,
+                last_name: existing.last_name,
+                date_of_birth: existing.date_of_birth || undefined,
+                gender: existing.gender || undefined,
+                phone: existing.phone,
+                email: existing.email || undefined,
+                address: existing.address || undefined,
+                city: existing.city || undefined,
+                emergency_contact_name: existing.emergency_contact_name || undefined,
+                emergency_contact_phone: existing.emergency_contact_phone || undefined,
+                allergies: existing.allergies || undefined,
+                current_medications: existing.current_medications || undefined,
+                medical_conditions: existing.medical_conditions || undefined,
+                registration_date: existing.registration_date,
+                last_visit_date: existing.last_visit_date || undefined,
+                notes: existing.notes || undefined,
+                status: existing.status,
+                created_at: existing.created_at,
+                created_by: existing.created_by || undefined,
+                balance: existing.balance != null ? Number(existing.balance) : undefined,
+                archived_at: existing.archived_at || undefined,
+              } as Patient;
+
+              setDuplicatePatientWarningForPhone(normalizedPhone);
+              setDuplicatePatientInfo(mapped);
+              setDuplicateModalOpen(true);
+              return;
+            }
+          } catch (err) {
+            logger.error('Error checking duplicate patient phone:', err);
+          }
+        }
+      }
+
+      setIsSubmitting(true);
+
+      if (formMode === 'create') {
+        await createPatientFromForm();
+      } else {
+        const patientIdToUpdate = editingPatientId || selectedPatient?.id;
+        if (!patientIdToUpdate) {
+          toast({
+            title: 'Error',
+            description: 'No customer selected to update',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        const result = await updatePatient(patientIdToUpdate, {
+          ...formData,
+          gender: formData.gender as 'male' | 'female' | 'other' | undefined,
+        });
+
+        if (result.success) {
+          toast({
+            title: 'Patient Updated',
+            description: 'Patient information has been updated successfully',
+          });
+          if (result.data) {
+            setSelectedPatient((prev) => (prev && prev.id === result.data!.id ? result.data! : prev));
+          }
+          fetchPatientsPage({ page: currentPage, pageSize, searchQuery, statusFilter });
+          setIsFormOpen(false);
+          setEditingPatientId(null);
+        } else {
+          toast({
+            title: 'Error',
+            description: result.error || 'Failed to update patient',
+            variant: 'destructive',
+          });
+        }
+      }
+    } catch (err: any) {
+      logger.error('Error submitting patient form:', err);
+      toast({
+        title: 'Error',
+        description: err?.message || 'An unexpected error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (isPageLoading && currentPagePatients.length === 0) {
@@ -1413,177 +1438,22 @@ export default function Patients() {
       </div>
 
       {/* Create/Edit Patient Dialog */}
-      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{formMode === 'create' ? 'Register New Customer' : 'Edit Customer'}</DialogTitle>
-            <DialogDescription>
-              {formMode === 'create' 
-                ? 'Fill in the customer information below' 
-                : 'Update the customer information'
-              }
-            </DialogDescription>
-          </DialogHeader>
-          
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Basic Info */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Basic Information</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="form-label">First Name *</label>
-                  <Input
-                    value={formData.first_name}
-                    onChange={(e) => setFormData({...formData, first_name: e.target.value})}
-                    placeholder="Enter first name"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Last Name *</label>
-                  <Input
-                    value={formData.last_name}
-                    onChange={(e) => setFormData({...formData, last_name: e.target.value})}
-                    placeholder="Enter last name"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Phone *</label>
-                  <Input
-                    value={formData.phone}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    placeholder="0321-1234567"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Email</label>
-                  <Input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    placeholder="customer@email.com"
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Date of Birth</label>
-                  <Input
-                    type="date"
-                    value={formData.date_of_birth}
-                    onChange={(e) => setFormData({...formData, date_of_birth: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Gender</label>
-                  <Select value={formData.gender} onValueChange={(v) => setFormData({...formData, gender: v})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select gender" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="male">Male</SelectItem>
-                      <SelectItem value="female">Female</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-
-            {/* Contact Info */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Contact Information</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <label className="form-label">Address</label>
-                  <Input
-                    value={formData.address}
-                    onChange={(e) => setFormData({...formData, address: e.target.value})}
-                    placeholder="Street address"
-                  />
-                </div>
-                <div>
-                  <label className="form-label">City</label>
-                  <Input
-                    value={formData.city}
-                    onChange={(e) => setFormData({...formData, city: e.target.value})}
-                    placeholder="City"
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Emergency Contact Name</label>
-                  <Input
-                    value={formData.emergency_contact_name}
-                    onChange={(e) => setFormData({...formData, emergency_contact_name: e.target.value})}
-                    placeholder="Contact name"
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Emergency Contact Phone</label>
-                  <Input
-                    value={formData.emergency_contact_phone}
-                    onChange={(e) => setFormData({...formData, emergency_contact_phone: e.target.value})}
-                    placeholder="0321-1234567"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Medical Info */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Medical Information</h3>
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="form-label">Allergies</label>
-                  <Textarea
-                    value={formData.allergies}
-                    onChange={(e) => setFormData({...formData, allergies: e.target.value})}
-                    placeholder="List any known allergies"
-                    rows={2}
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Current Medications</label>
-                  <Textarea
-                    value={formData.current_medications}
-                    onChange={(e) => setFormData({...formData, current_medications: e.target.value})}
-                    placeholder="List current medications"
-                    rows={2}
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Medical Conditions</label>
-                  <Textarea
-                    value={formData.medical_conditions}
-                    onChange={(e) => setFormData({...formData, medical_conditions: e.target.value})}
-                    placeholder="List any medical conditions"
-                    rows={2}
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Notes</label>
-                  <Textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                    placeholder="Additional notes"
-                    rows={2}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                {formMode === 'create' ? 'Register Patient' : 'Save Changes'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <PatientFormDialog
+        open={isFormOpen}
+        onOpenChange={(open) => {
+          setIsFormOpen(open);
+          if (!open) {
+            setEditingPatientId(null);
+          }
+        }}
+        mode={formMode}
+        formData={formData}
+        onFormDataChange={setFormData}
+        onSubmit={handleSubmit}
+        isSubmitting={isSubmitting}
+        duplicateWarning={duplicatePatientWarningForPhone}
+        selectedPatient={selectedPatient}
+      />
 
       {/* Patient Statement (Ledger) Dialog */}
       <Dialog

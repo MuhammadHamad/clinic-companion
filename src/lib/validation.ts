@@ -13,7 +13,11 @@ export const patientSchema = z.object({
   phone: z.string()
     .min(1, 'Phone number is required')
     .regex(/^[\d\s\-\+\(\)]+$/, 'Please enter a valid phone number')
-    .min(10, 'Phone number must be at least 10 digits'),
+    .refine((phone) => {
+      // Count digits only (ignore spaces, hyphens, parentheses, plus)
+      const digitCount = phone.replace(/\D/g, '').length;
+      return digitCount >= 10;
+    }, 'Phone number must be at least 10 digits'),
   email: z.string()
     .email('Please enter a valid email address')
     .optional()
