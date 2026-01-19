@@ -201,8 +201,11 @@ export function usePatients(options?: { autoFetch?: boolean }) {
         .single();
 
       if (error) throw error;
-      setPatients((prev) => prev.map((p) => (p.id === id ? mapRowToPatient(data) : p)));
-      return { success: true };
+      const updated = mapRowToPatient(data);
+
+      setPatients((prev) => prev.map((p) => (p.id === id ? updated : p)));
+      setPagedPatients((prev) => prev.map((p) => (p.id === id ? updated : p)));
+      return { success: true, data: updated };
     } catch (error: any) {
       logger.error('Error updating patient:', error);
       return { success: false, error: error.message };

@@ -1156,6 +1156,10 @@ export default function Patients() {
           title: 'Patient Updated',
           description: 'Patient information has been updated successfully',
         });
+        if (result.data) {
+          setSelectedPatient((prev) => (prev && prev.id === result.data!.id ? result.data! : prev));
+        }
+        fetchPatientsPage({ page: currentPage, pageSize, searchQuery, statusFilter });
         setIsFormOpen(false);
       } else {
         toast({
@@ -1824,7 +1828,7 @@ export default function Patients() {
       >
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto pr-2">
           <DialogHeader className="pt-8 sm:pt-0">
-            <DialogTitle>Patient Profile</DialogTitle>
+            <DialogTitle>Customer Profile</DialogTitle>
           </DialogHeader>
           
           {selectedPatient && (

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,9 +21,10 @@ export function InvoiceViewDialog({
   onUpdateDiscount?: (invoice: Invoice, discountAmount: number) => Promise<void> | void;
 }) {
   const [isEditingDiscount, setIsEditingDiscount] = useState(false);
-  const [discountDraft, setDiscountDraft] = useState<number>(0);
+  const [discountDraft, setDiscountDraft] = useState<string>('');
   const [isSavingDiscount, setIsSavingDiscount] = useState(false);
   const [localInvoice, setLocalInvoice] = useState<Invoice | null>(null);
+  const discountInputRef = useRef<HTMLInputElement | null>(null);
 
   const handlePrint = () => {
     if (!localInvoice) return;
@@ -45,13 +46,24 @@ export function InvoiceViewDialog({
     }
     setIsEditingDiscount(false);
     setLocalInvoice(invoice);
-    setDiscountDraft(invoice?.discount_amount ?? 0);
+    setDiscountDraft(invoice?.discount_amount ? String(invoice.discount_amount) : '');
     setIsSavingDiscount(false);
   }, [open, invoice?.id]);
 
+  useEffect(() => {
+    if (!isEditingDiscount) return;
+    const t = window.setTimeout(() => {
+      discountInputRef.current?.focus();
+      discountInputRef.current?.select();
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [isEditingDiscount]);
+
   const totalsPreview = useMemo(() => {
     if (!localInvoice) return null;
-    const nextTotal = localInvoice.subtotal - (discountDraft || 0) + (localInvoice.tax_amount || 0);
+    const draftNumber = discountDraft === '' ? 0 : Number(discountDraft);
+    const safeDraft = Number.isFinite(draftNumber) ? draftNumber : 0;
+    const nextTotal = localInvoice.subtotal - safeDraft + (localInvoice.tax_amount || 0);
     const nextBalance = Math.max(0, nextTotal - (localInvoice.amount_paid || 0));
     return {
       total_amount: nextTotal,
@@ -68,7 +80,8 @@ export function InvoiceViewDialog({
     if (!localInvoice || !onUpdateDiscount) return;
     if (!canEditDiscount) return;
 
-    const requested = Math.max(0, Number.isFinite(discountDraft) ? discountDraft : 0);
+    const requestedRaw = discountDraft === '' ? 0 : Number(discountDraft);
+    const requested = Math.max(0, Number.isFinite(requestedRaw) ? requestedRaw : 0);
     const maxDiscountAllowed = Math.max(
       0,
       (localInvoice.subtotal || 0) + (localInvoice.tax_amount || 0) - (localInvoice.amount_paid || 0),
@@ -109,7 +122,7 @@ export function InvoiceViewDialog({
           <div className="space-y-8 py-6">
             <div className="grid grid-cols-2 gap-8">
               <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Patient</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer</p>
                 <p className="text-lg font-medium text-foreground">
                   {localInvoice.patient?.first_name} {localInvoice.patient?.last_name}
                 </p>
@@ -162,9 +175,13 @@ export function InvoiceViewDialog({
                         type="number"
                         min="0"
                         value={discountDraft}
-                        onChange={(e) => setDiscountDraft(parseFloat(e.target.value) || 0)}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          setDiscountDraft(next);
+                        }}
                         className="w-32 text-right"
                         disabled={isSavingDiscount}
+                        ref={discountInputRef}
                       />
                       <Button
                         type="button"
@@ -172,7 +189,7 @@ export function InvoiceViewDialog({
                         size="icon"
                         onClick={() => {
                           setIsEditingDiscount(false);
-                          setDiscountDraft(localInvoice.discount_amount || 0);
+                          setDiscountDraft(localInvoice.discount_amount ? String(localInvoice.discount_amount) : '');
                         }}
                         disabled={isSavingDiscount}
                       >
@@ -191,7 +208,10 @@ export function InvoiceViewDialog({
                           type="button"
                           variant="outline"
                           size="icon"
-                          onClick={() => setIsEditingDiscount(true)}
+                          onClick={() => {
+                            setIsEditingDiscount(true);
+                            setDiscountDraft(localInvoice.discount_amount ? String(localInvoice.discount_amount) : '');
+                          }}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -237,7 +257,7 @@ export function InvoiceViewDialog({
                     className="flex-1 h-11"
                     onClick={() => {
                       setIsEditingDiscount(false);
-                      setDiscountDraft(localInvoice.discount_amount || 0);
+                      setDiscountDraft(localInvoice.discount_amount ? String(localInvoice.discount_amount) : '');
                     }}
                     disabled={isSavingDiscount}
                   >
