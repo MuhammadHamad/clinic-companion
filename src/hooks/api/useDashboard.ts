@@ -4,6 +4,22 @@ import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { DashboardStats, Appointment, AppointmentStatus, Patient } from '@/types';
 import { useToast } from '@/hooks';
+import { useTenant } from '@/contexts/TenantContext';
+
+const formatLocalDate = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const toHHMM = (value: unknown) => {
+  const s = String(value || '').trim();
+  if (!s) return s;
+  const parts = s.split(':');
+  if (parts.length >= 2) return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
+  return s;
+};
 
 export function useDashboard() {
   const defaultStats: DashboardStats = {
@@ -30,12 +46,22 @@ export function useDashboard() {
     },
   };
   const { toast } = useToast();
+  const { activeClinicId } = useTenant();
 
   const fetchDashboardData = useCallback(async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-      const startOfYear = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
+      if (!activeClinicId) {
+        return {
+          stats: defaultStats,
+          todayAppointments: [],
+          revenueData: [],
+        };
+      }
+
+      const now = new Date();
+      const today = formatLocalDate(now);
+      const startOfMonth = formatLocalDate(new Date(now.getFullYear(), now.getMonth(), 1));
+      const startOfYear = formatLocalDate(new Date(now.getFullYear(), 0, 1));
       const todayStart = `${today}T00:00:00`;
       const todayEnd = `${today}T23:59:59`;
       const startOfMonthTs = `${startOfMonth}T00:00:00`;
@@ -70,6 +96,7 @@ export function useDashboard() {
             *,
             patient:patients(*)
           `)
+          .eq('clinic_id', activeClinicId)
           .eq('appointment_date', today)
           .order('start_time'),
         
@@ -109,6 +136,7 @@ export function useDashboard() {
         supabase
           .from('appointments')
           .select('*', { count: 'exact', head: true })
+          .eq('clinic_id', activeClinicId)
           .eq('status', 'completed')
           .gte('appointment_date', startOfMonth),
         
@@ -149,8 +177,8 @@ export function useDashboard() {
         patient_id: a.patient_id,
         dentist_id: a.dentist_id,
         appointment_date: a.appointment_date,
-        start_time: a.start_time,
-        end_time: a.end_time,
+        start_time: toHHMM(a.start_time),
+        end_time: toHHMM(a.end_time),
         appointment_type: a.appointment_type,
         status: a.status as AppointmentStatus,
         reason_for_visit: a.reason_for_visit,
@@ -233,7 +261,7 @@ export function useDashboard() {
       for (let i = 6; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
-        last7Days.push(date.toISOString().split('T')[0]);
+        last7Days.push(formatLocalDate(date));
       }
 
       const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -263,17 +291,18 @@ export function useDashboard() {
       throw error;
     } finally {
     }
-  }, [toast]);
+  }, [activeClinicId, toast]);
 
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const query = useQuery({
-    queryKey: ['dashboard'],
+    queryKey: ['dashboard', activeClinicId],
     queryFn: async () => {
       const result = await fetchDashboardData();
       setLastUpdated(new Date());
       return result;
     },
+    enabled: !!activeClinicId,
     placeholderData: (prev) => prev,
     refetchOnMount: 'always',
     staleTime: 0,

@@ -164,6 +164,8 @@ export const appointmentSchema = z.object({
     .refine((date) => {
       const appointment = new Date(date);
       const today = new Date();
+      appointment.setHours(0, 0, 0, 0);
+      today.setHours(0, 0, 0, 0);
       return appointment >= today;
     }, 'Appointment date cannot be in the past'),
   start_time: z.string()
@@ -172,8 +174,15 @@ export const appointmentSchema = z.object({
   end_time: z.string()
     .min(1, 'End time is required')
     .regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Please enter a valid time (HH:MM)'),
-  appointment_type: z.enum(['checkup', 'treatment', 'consultation', 'followup', 'emergency'])
-    .refine((val) => val !== undefined, 'Appointment type is required'),
+  appointment_type: z.enum([
+    'Checkup',
+    'Cleaning',
+    'Filling',
+    'Root Canal',
+    'Extraction',
+    'Crown',
+    'Other',
+  ]),
   notes: z.string()
     .max(500, 'Notes must be less than 500 characters')
     .optional()
@@ -188,7 +197,11 @@ export const appointmentSchema = z.object({
     return end > start;
   }
   return true;
-}, 'End time must be after start time');
+}, 'End time must be after start time').refine((data) => {
+  if (!data.appointment_date || !data.start_time) return true;
+  const start = new Date(`${data.appointment_date}T${data.start_time}:00`);
+  return start.getTime() > Date.now();
+}, 'Appointment time must be in the future');
 
 // Stock movement form validation schema
 export const stockMovementSchema = z.object({

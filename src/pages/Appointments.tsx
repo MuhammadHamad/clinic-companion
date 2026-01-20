@@ -30,18 +30,20 @@ import {
   X,
   AlertCircle,
   Loader2,
+  Share2,
 } from 'lucide-react';
-import { useAppointments, usePatients, useTreatmentTypes } from '@/hooks';
+import { useAppointments, usePatients } from '@/hooks';
 import { Appointment, AppointmentStatus, AppointmentType } from '@/types';
 import { useToast } from '@/hooks';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const timeSlots = [
-  '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-  '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
-  '15:00', '15:30', '16:00', '16:30', '17:00', '17:30',
-];
+const timeSlots = Array.from({ length: 48 }, (_, i) => {
+  const totalMinutes = i * 30;
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+});
 
 const statusColors: Record<AppointmentStatus, string> = {
   scheduled: 'bg-status-scheduled text-white',
@@ -67,15 +69,25 @@ const durationOptions = [
   { value: '120', label: '2 hours' },
 ];
 
+const appointmentTypeOptions: Array<{ value: AppointmentType; label: string }> = [
+  { value: 'Checkup', label: 'Checkup' },
+  { value: 'Cleaning', label: 'Cleaning' },
+  { value: 'Filling', label: 'Filling' },
+  { value: 'Root Canal', label: 'Root Canal' },
+  { value: 'Extraction', label: 'Extraction' },
+  { value: 'Crown', label: 'Crown' },
+  { value: 'Other', label: 'Other' },
+];
+
 export default function Appointments() {
-  const { appointments, isLoading, createAppointment, updateAppointmentStatus } = useAppointments();
+  const { appointments, isLoading, isRefreshing, createAppointment, updateAppointmentStatus } = useAppointments();
   const { patients } = usePatients();
-  const { treatmentTypes } = useTreatmentTypes();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showAllSlots, setShowAllSlots] = useState(false);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -88,7 +100,12 @@ export default function Appointments() {
     notes: '',
   });
 
-  const formatDate = (date: Date) => date.toISOString().split('T')[0];
+  const formatDate = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
   const formatDisplayDate = (date: Date) => date.toLocaleDateString('en-US', { 
     weekday: 'long', 
     year: 'numeric', 
@@ -108,8 +125,61 @@ export default function Appointments() {
     a => a.appointment_date === formatDate(selectedDate)
   );
 
+  const sortedAppointments = [...todayAppointments].sort((a, b) => a.start_time.localeCompare(b.start_time));
+
   const getAppointmentForTimeSlot = (time: string) => {
     return todayAppointments.find(a => a.start_time === time);
+  };
+
+  const getPatientForAppointment = (appointment: Appointment) => {
+    return appointment.patient || patients.find((p) => p.id === appointment.patient_id);
+  };
+
+  const formatTime12h = (time: string) => {
+    const s = String(time || '').trim();
+    if (!s) return '';
+    const [hhStr, mmStr] = s.split(':');
+    const hh = Number(hhStr);
+    const mm = Number(mmStr);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return s;
+    const d = new Date();
+    d.setHours(hh, mm, 0, 0);
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  };
+
+  const parseTimeToSeconds = (time: string) => {
+    const s = String(time || '').trim();
+    const [hhStr, mmStr] = s.split(':');
+    const hh = Number(hhStr);
+    const mm = Number(mmStr);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return NaN;
+    return hh * 3600 + mm * 60;
+  };
+
+  const getNowSecondsOfDay = () => {
+    const n = new Date();
+    return n.getHours() * 3600 + n.getMinutes() * 60 + n.getSeconds();
+  };
+
+  const isDateToday = (dateStr: string) => {
+    if (!dateStr) return false;
+    return dateStr === formatDate(new Date());
+  };
+
+  const isPastDay = (dateStr: string) => {
+    if (!dateStr) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const d = new Date(`${dateStr}T00:00:00`);
+    return d.getTime() < today.getTime();
+  };
+
+  const canOpenScheduleDialog = (dateStr: string, startTime?: string) => {
+    if (!dateStr) return true;
+    if (isPastDay(dateStr)) return false;
+    if (!startTime) return true;
+    const start = new Date(`${dateStr}T${startTime}:00`);
+    return start.getTime() > Date.now();
   };
 
   const addMinutes = (time: string, minutes: number) => {
@@ -120,10 +190,57 @@ export default function Appointments() {
     return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
   };
 
+  const isSlotConflicting = (dateStr: string, startTime: string, endTime: string) => {
+    return appointments.some((a) => {
+      if (a.appointment_date !== dateStr) return false;
+      if (a.status === 'cancelled') return false;
+      return (
+        (startTime >= a.start_time && startTime < a.end_time) ||
+        (endTime > a.start_time && endTime <= a.end_time)
+      );
+    });
+  };
+
+  const availableStartTimes = (() => {
+    if (!isDateToday(formData.appointment_date)) return timeSlots;
+    const nowSec = getNowSecondsOfDay();
+    return timeSlots.filter((t) => {
+      const sec = parseTimeToSeconds(t);
+      return Number.isFinite(sec) && sec > nowSec;
+    });
+  })();
+
+  const availableSlotsForSelectedDate = (() => {
+    const dateStr = formatDate(selectedDate);
+    const candidateSlots = isDateToday(dateStr)
+      ? timeSlots.filter((t) => {
+          const sec = parseTimeToSeconds(t);
+          return Number.isFinite(sec) && sec > getNowSecondsOfDay();
+        })
+      : timeSlots;
+
+    const available = candidateSlots.filter((t) => {
+      if (!canOpenScheduleDialog(dateStr, t)) return false;
+      const endTime = addMinutes(t, 30);
+      return !isSlotConflicting(dateStr, t, endTime);
+    });
+
+    return showAllSlots ? available : available.slice(0, 16);
+  })();
+
   const openCreateForm = () => {
+    const dateStr = formatDate(selectedDate);
+    if (isPastDay(dateStr)) {
+      toast({
+        title: 'Cannot Schedule in the Past',
+        description: 'Please choose today or a future date for a new appointment.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setFormData({
       patient_id: '',
-      appointment_date: formatDate(selectedDate),
+      appointment_date: dateStr,
       start_time: '',
       duration: '30',
       appointment_type: '',
@@ -151,6 +268,17 @@ export default function Appointments() {
     }
 
     const endTime = addMinutes(formData.start_time, parseInt(formData.duration));
+
+    // Strictly prevent scheduling in the past (even 1 second ago)
+    const startDateTime = new Date(`${formData.appointment_date}T${formData.start_time}:00`);
+    if (!(startDateTime.getTime() > Date.now())) {
+      toast({
+        title: 'Invalid Time',
+        description: 'You cannot schedule an appointment in the past. Please choose a future time.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const hasConflict = appointments.some(a => {
       if (a.appointment_date !== formData.appointment_date) return false;
       if (a.status === 'cancelled') return false;
@@ -188,9 +316,16 @@ export default function Appointments() {
         description: `Appointment scheduled for ${patient?.first_name} ${patient?.last_name}`,
       });
     } else {
+      const rawError = result.error || 'Failed to create appointment';
+      const isTypeEnumError =
+        rawError.toLowerCase().includes('invalid input value for enum') &&
+        rawError.toLowerCase().includes('appointment_type');
+
       toast({
         title: 'Error',
-        description: result.error || 'Failed to create appointment',
+        description: isTypeEnumError
+          ? 'This appointment type is not allowed by the database. Please pick a type from the dropdown. If the dropdown is wrong/empty, the DB enum values need to be configured.'
+          : rawError,
         variant: 'destructive',
       });
     }
@@ -208,11 +343,45 @@ export default function Appointments() {
     }
   };
 
-  if (isLoading) {
+  const shareAppointmentWhatsApp = (appointment: Appointment) => {
+    const raw = (appointment.patient?.phone || '').trim();
+    const digits = raw.replace(/\D+/g, '');
+    const phone = digits.startsWith('0') ? digits.slice(1) : digits;
+
+    if (!phone) {
+      toast({
+        title: 'Missing Phone',
+        description: 'This patient does not have a valid phone number for WhatsApp.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const patientName = `${appointment.patient?.first_name || ''} ${appointment.patient?.last_name || ''}`.trim() || 'Patient';
+    const msg =
+      `Hi ${patientName},\n\n` +
+      `Your appointment is confirmed.\n` +
+      `Date: ${appointment.appointment_date}\n` +
+      `Time: ${formatTime12h(appointment.start_time)} - ${formatTime12h(appointment.end_time)}\n` +
+      `Type: ${appointment.appointment_type}\n\n` +
+      `Please reply “OK” to confirm. Thanks.`;
+
+    const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+    const waWindow = window.open(waUrl, '_blank', 'noopener,noreferrer');
+    if (!waWindow) {
+      toast({
+        title: 'Popup Blocked',
+        description: 'Please allow popups to open WhatsApp.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  if (isLoading && appointments.length === 0) {
     return (
       <div className="min-h-screen">
         <Header title="Appointments" subtitle="Manage your daily appointments" />
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-6">
           <Skeleton className="h-10 w-full max-w-md" />
           <Skeleton className="h-96 w-full" />
         </div>
@@ -224,9 +393,9 @@ export default function Appointments() {
     <div className="min-h-screen">
       <Header title="Appointments" subtitle="Manage your daily appointments" />
       
-      <div className="p-6 space-y-6 animate-fade-in">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <div className="p-4 sm:p-6 space-y-6 animate-fade-in">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Button variant="outline" size="icon" onClick={() => navigateDate('prev')}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -234,62 +403,121 @@ export default function Appointments() {
             <Button variant="outline" size="icon" onClick={() => navigateDate('next')}>
               <ChevronRight className="h-4 w-4" />
             </Button>
-            <h2 className="text-lg font-semibold ml-4">{formatDisplayDate(selectedDate)}</h2>
+            <h2 className="text-base sm:text-lg font-semibold sm:ml-4">{formatDisplayDate(selectedDate)}</h2>
           </div>
-          <Button onClick={openCreateForm}>
+          <Button onClick={openCreateForm} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             New Appointment
           </Button>
         </div>
 
+        {isRefreshing && (
+          <div className="text-xs text-muted-foreground">Updating…</div>
+        )}
+
         <Card>
           <CardContent className="p-0">
-            <div className="divide-y divide-border">
-              {timeSlots.map((time) => {
-                const appointment = getAppointmentForTimeSlot(time);
-                return (
-                  <div key={time} className="flex min-h-[60px]">
-                    <div className="w-20 py-3 px-4 text-sm text-muted-foreground font-medium border-r border-border bg-muted/30 flex items-center">
-                      {time}
-                    </div>
-                    <div className="flex-1 p-2">
-                      {appointment ? (
-                        <button
-                          onClick={() => openAppointmentDetail(appointment)}
-                          className={cn(
-                            'w-full h-full min-h-[44px] rounded-lg px-3 py-2 text-left transition-all hover:opacity-90',
-                            statusColors[appointment.status]
-                          )}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-medium text-sm">
-                                {appointment.patient?.first_name} {appointment.patient?.last_name}
-                              </p>
-                              <p className="text-xs opacity-80">
-                                {appointment.appointment_type} • {appointment.start_time} - {appointment.end_time}
-                              </p>
+            <div className="p-4 sm:p-6 space-y-5">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold">Appointments</h3>
+                <Badge variant="outline" className="text-xs">
+                  {sortedAppointments.length} total
+                </Badge>
+              </div>
+
+              {sortedAppointments.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No appointments for this date.</div>
+              ) : (
+                <div className="space-y-3">
+                  {sortedAppointments.map((appointment) => {
+                    const patient = getPatientForAppointment(appointment);
+                    return (
+                      <button
+                        key={appointment.id}
+                        onClick={() => openAppointmentDetail(appointment)}
+                        className={cn(
+                          'w-full rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-muted/40',
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold">
+                                {formatTime12h(appointment.start_time)}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {formatTime12h(appointment.end_time)}
+                              </span>
+                              <Badge
+                                variant="outline"
+                                className={cn('ml-2 capitalize', statusBadgeColors[appointment.status])}
+                              >
+                                {appointment.status.replace('_', ' ')}
+                              </Badge>
                             </div>
+                            <p className="mt-1 text-sm font-medium truncate">
+                              {patient?.first_name} {patient?.last_name}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {appointment.appointment_type}
+                            </p>
                           </div>
-                        </button>
-                      ) : (
-                        <div className="w-full h-full min-h-[44px] rounded-lg border border-dashed border-border hover:border-primary/50 hover:bg-muted/30 transition-colors cursor-pointer flex items-center justify-center"
-                          onClick={() => {
-                            setFormData({
-                              ...formData,
-                              appointment_date: formatDate(selectedDate),
-                              start_time: time,
-                            });
-                            setIsFormOpen(true);
-                          }}
-                        >
-                          <Plus className="h-4 w-4 text-muted-foreground" />
                         </div>
-                      )}
-                    </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-border">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold">Available slots</h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowAllSlots((v) => !v)}
+                    className="h-7 px-2 text-xs"
+                  >
+                    {showAllSlots ? 'Show less' : 'Show all'}
+                  </Button>
+                </div>
+
+                {availableSlotsForSelectedDate.length === 0 ? (
+                  <div className="mt-2 text-sm text-muted-foreground">No available future slots.</div>
+                ) : (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {availableSlotsForSelectedDate.map((time) => (
+                      <Button
+                        key={time}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-2 text-xs"
+                        onClick={() => {
+                          const dateStr = formatDate(selectedDate);
+                          if (!canOpenScheduleDialog(dateStr, time)) {
+                            toast({
+                              title: 'Cannot Schedule in the Past',
+                              description: 'Please pick a future time slot.',
+                              variant: 'destructive',
+                            });
+                            return;
+                          }
+
+                          setFormData((prev) => ({
+                            ...prev,
+                            appointment_date: dateStr,
+                            start_time: time,
+                          }));
+                          setIsFormOpen(true);
+                        }}
+                      >
+                        {formatTime12h(time)}
+                      </Button>
+                    ))}
                   </div>
-                );
-              })}
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -311,7 +539,7 @@ export default function Appointments() {
       </div>
 
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Schedule Appointment</DialogTitle>
             <DialogDescription>Book a new appointment for a patient</DialogDescription>
@@ -351,8 +579,8 @@ export default function Appointments() {
                     <SelectValue placeholder="Select time" />
                   </SelectTrigger>
                   <SelectContent>
-                    {timeSlots.map(time => (
-                      <SelectItem key={time} value={time}>{time}</SelectItem>
+                    {availableStartTimes.map(time => (
+                      <SelectItem key={time} value={time}>{formatTime12h(time)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -380,8 +608,8 @@ export default function Appointments() {
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
-                    {treatmentTypes.map(type => (
-                      <SelectItem key={type.id} value={type.name}>{type.name}</SelectItem>
+                    {appointmentTypeOptions.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -412,22 +640,29 @@ export default function Appointments() {
       </Dialog>
 
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Appointment Details</DialogTitle>
           </DialogHeader>
           
           {selectedAppointment && (
+            (() => {
+              const patient = getPatientForAppointment(selectedAppointment);
+              const mergedAppointment = {
+                ...selectedAppointment,
+                patient: selectedAppointment.patient || patient,
+              } as Appointment;
+              return (
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
-                  {selectedAppointment.patient?.first_name[0]}{selectedAppointment.patient?.last_name[0]}
+                  {mergedAppointment.patient?.first_name?.[0]}{mergedAppointment.patient?.last_name?.[0]}
                 </div>
                 <div>
                   <h3 className="font-semibold">
-                    {selectedAppointment.patient?.first_name} {selectedAppointment.patient?.last_name}
+                    {mergedAppointment.patient?.first_name} {mergedAppointment.patient?.last_name}
                   </h3>
-                  <p className="text-sm text-muted-foreground">{selectedAppointment.patient?.phone}</p>
+                  <p className="text-sm text-muted-foreground">{mergedAppointment.patient?.phone}</p>
                 </div>
                 <Badge 
                   variant="outline" 
@@ -444,7 +679,7 @@ export default function Appointments() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-muted-foreground" />
-                  <span>{selectedAppointment.start_time} - {selectedAppointment.end_time}</span>
+                  <span>{formatTime12h(selectedAppointment.start_time)} - {formatTime12h(selectedAppointment.end_time)}</span>
                 </div>
               </div>
 
@@ -454,6 +689,16 @@ export default function Appointments() {
                   <p className="text-sm text-muted-foreground mt-1">{selectedAppointment.reason_for_visit}</p>
                 )}
               </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => shareAppointmentWhatsApp(mergedAppointment)}
+                disabled={!mergedAppointment.patient?.phone}
+              >
+                <Share2 className="h-4 w-4 mr-2" />
+                WhatsApp Confirmation
+              </Button>
 
               {selectedAppointment.status !== 'completed' && selectedAppointment.status !== 'cancelled' && (
                 <div className="flex gap-2 pt-2">
@@ -472,6 +717,8 @@ export default function Appointments() {
                 </div>
               )}
             </div>
+              );
+            })()
           )}
         </DialogContent>
       </Dialog>

@@ -39,7 +39,14 @@ export interface Patient {
 
 // Appointment types
 export type AppointmentStatus = 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
-export type AppointmentType = 'Checkup' | 'Cleaning' | 'Filling' | 'Root Canal' | 'Extraction' | 'Crown' | 'Other';
+export type AppointmentType =
+  | 'Checkup'
+  | 'Cleaning'
+  | 'Filling'
+  | 'Root Canal'
+  | 'Extraction'
+  | 'Crown'
+  | 'Other';
 
 export interface Appointment {
   id: string;

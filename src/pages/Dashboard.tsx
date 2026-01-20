@@ -31,6 +31,18 @@ const statusColors: Record<string, string> = {
 export default function Dashboard() {
   const { stats, todayAppointments, revenueData, isLoading, isRefreshing, lastUpdated, refresh } = useDashboard();
 
+  const formatTime12h = (time: string) => {
+    const s = String(time || '').trim();
+    if (!s) return '';
+    const [hhStr, mmStr] = s.split(':');
+    const hh = Number(hhStr);
+    const mm = Number(mmStr);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return s;
+    const d = new Date();
+    d.setHours(hh, mm, 0, 0);
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  };
+
   // Use the trend from state directly so the bar aligns with the real current month index
   const monthlyTrendData = useMemo(
     () => stats.year.monthly_trend || [],
@@ -295,29 +307,29 @@ export default function Dashboard() {
             </CardContent>
           </Card>
           {/* Today's Appointments */}
-          <Card>
+          <Card className="h-[420px] flex flex-col">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
               <CardTitle className="text-lg font-semibold">Today's Appointments</CardTitle>
               <Button variant="ghost" size="sm" asChild>
                 <Link to="/appointments">View All</Link>
               </Button>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
+            <CardContent className="flex-1 overflow-hidden">
+              <div className="h-full overflow-y-auto pr-1 space-y-3">
                 {todayAppointments.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
                     <p>No appointments scheduled for today</p>
                   </div>
                 ) : (
-                  todayAppointments.slice(0, 5).map((appointment) => (
+                  todayAppointments.map((appointment) => (
                     <div
                       key={appointment.id}
                       className="flex items-center gap-4 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
                     >
                       <div className="flex flex-col items-center justify-center h-12 w-14 rounded-lg bg-background border border-border">
                         <Clock className="h-3.5 w-3.5 text-muted-foreground mb-0.5" />
-                        <span className="text-xs font-medium">{appointment.start_time}</span>
+                        <span className="text-xs font-medium">{formatTime12h(appointment.start_time)}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-foreground truncate">

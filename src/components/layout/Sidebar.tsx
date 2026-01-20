@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
+  CalendarDays,
   Package,
   BarChart3,
   Settings,
@@ -29,6 +30,7 @@ interface NavItem {
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Customers', href: '/patients', icon: Users },
+  { name: 'Appointments', href: '/appointments', icon: CalendarDays },
   { name: 'Inventory', href: '/inventory', icon: Package, allowedRoles: ['admin'] },
   { name: 'Reports', href: '/reports', icon: BarChart3, allowedRoles: ['admin', 'dentist'] },
 ];
