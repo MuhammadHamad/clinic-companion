@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Stethoscope, Lock, Check, X } from 'lucide-react';
+import { Eye, EyeOff, Lock, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
+import { BrandMark } from '@/components/BrandMark';
 import { useToast } from '@/hooks';
 
 export default function ResetPassword() {
@@ -178,7 +179,7 @@ export default function ResetPassword() {
         <div className="w-full max-w-md space-y-6 text-center">
           <div className="flex items-center justify-center gap-3 mb-8">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-              <Stethoscope className="h-7 w-7 text-primary-foreground" />
+              <BrandMark className="h-7 w-7 text-primary-foreground" />
             </div>
           </div>
           <h2 className="text-2xl font-display font-bold text-foreground">
@@ -200,7 +201,7 @@ export default function ResetPassword() {
       <div className="w-full max-w-md space-y-8">
         <div className="flex items-center justify-center gap-3 mb-8">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-            <Stethoscope className="h-7 w-7 text-primary-foreground" />
+            <BrandMark className="h-7 w-7 text-primary-foreground" />
           </div>
           <div>
             <h1 className="text-2xl font-display font-bold">Endicode Clinic</h1>

@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Eye, EyeOff, Stethoscope, Mail, Lock, Check, X } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
+import { BrandMark } from '@/components/BrandMark';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks';
 
@@ -411,7 +412,7 @@ export default function Login() {
         <div className="relative">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20 backdrop-blur">
-              <Stethoscope className="h-7 w-7 text-white" />
+              <BrandMark className="h-7 w-7 text-white" />
             </div>
             <div>
               <h1 className="text-2xl font-display font-bold text-white">Endicode Clinic</h1>
@@ -441,7 +442,7 @@ export default function Login() {
         </div>
 
         <div className="relative text-sm text-white/50">
-          © 2024 Endicode Clinic. All rights reserved.
+          2024 Endicode Clinic. All rights reserved.
         </div>
       </div>
 
@@ -450,7 +451,7 @@ export default function Login() {
         <div className="w-full max-w-md space-y-8">
           <div className="lg:hidden flex items-center justify-center gap-3 mb-8">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-              <Stethoscope className="h-7 w-7 text-primary-foreground" />
+              <BrandMark className="h-7 w-7 text-primary-foreground" />
             </div>
             <div>
               <h1 className="text-2xl font-display font-bold">Endicode Clinic</h1>

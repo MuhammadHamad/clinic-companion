@@ -5,7 +5,6 @@ import {
   Building2,
   Users,
   LogOut,
-  Shield,
   Inbox,
   Settings,
   Menu,
@@ -15,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { BrandMark } from '@/components/BrandMark';
 
 interface NavItem {
   name: string;
@@ -91,7 +91,7 @@ export function SaasSidebar({ onLogout, user }: SaasSidebarProps) {
       <div className="sidebar-mobile-only fixed top-0 left-0 right-0 z-50 h-16 px-4 flex items-center justify-between bg-background/80 backdrop-blur border-b border-border">
         <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
           <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary">
-            <Shield className="h-5 w-5 text-primary-foreground" />
+            <BrandMark className="h-5 w-5 text-primary-foreground" />
           </div>
           <div className="min-w-0 flex-1 overflow-hidden">
             <h1
@@ -117,7 +117,7 @@ export function SaasSidebar({ onLogout, user }: SaasSidebarProps) {
       <div className="flex h-full flex-col">
         <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-            <Shield className="h-5 w-5 text-primary-foreground" />
+            <BrandMark className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
             <h1 className="text-lg font-display font-bold text-sidebar-foreground">Endicode Clinic</h1>
