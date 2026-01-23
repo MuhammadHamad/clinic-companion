@@ -49,7 +49,7 @@
 
     --border-hover: 216 30% 34%;
 
-    --radius: 0.5rem;
+    --radius: 1rem;
 
     --sidebar-background: 217 37% 9%;
     --sidebar-foreground: 0 0% 100%;
@@ -61,18 +61,18 @@
     --sidebar-ring: 217 91% 60%;
     --sidebar-muted: 220 19% 63%;
 
-    /* Chart colors */
-    --chart-1: 217 91% 60%;
-    --chart-2: 160 100% 42%;
-    --chart-3: 38 92% 55%;
-    --chart-4: 280 65% 62%;
-    --chart-5: 340 80% 60%;
+    /* Chart colors - Neon Vibrant */
+    --chart-1: 24 95% 53%;   /* Bright Orange */
+    --chart-2: 142 70% 50%;  /* Neon Green */
+    --chart-3: 48 96% 53%;   /* Bright Yellow */
+    --chart-4: 262 80% 65%;  /* Purple */
+    --chart-5: 330 80% 60%;  /* Pink */
 
-    /* Status colors */
+    /* Status colors - High Contrast */
     --status-scheduled: 217 91% 60%;
-    --status-confirmed: 199 89% 56%;
-    --status-completed: 160 84% 42%;
-    --status-cancelled: 0 84% 62%;
+    --status-confirmed: 190 90% 50%;
+    --status-completed: 142 70% 50%;
+    --status-cancelled: 0 84% 60%;
     --status-no-show: 220 10% 55%;
 
     /* Financial */
@@ -83,29 +83,29 @@
   }
 
   .dark {
-    --background: 218 32% 15%;
+    --background: 224 15% 6%;
     --foreground: 0 0% 100%;
 
-    --card: 217 22% 20%;
+    --card: 224 15% 10%;
     --card-foreground: 0 0% 100%;
 
-    --popover: 217 22% 20%;
+    --popover: 224 15% 10%;
     --popover-foreground: 0 0% 100%;
 
-    --primary: 217 91% 60%;
+    --primary: 24 95% 53%;
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 216 91% 64%;
-    --primary-active: 218 91% 56%;
+    --primary-hover: 24 95% 58%;
+    --primary-active: 24 95% 48%;
 
-    --secondary: 217 37% 9%;
+    --secondary: 224 10% 14%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 217 33% 27%;
-    --muted-foreground: 220 19% 63%;
+    --muted: 224 10% 14%;
+    --muted-foreground: 220 10% 65%;
 
-    --text-muted: 217 18% 44%;
+    --text-muted: 220 10% 65%;
 
-    --accent: 218 29% 24%;
+    --accent: 224 10% 14%;
     --accent-foreground: 0 0% 100%;
 
     --accent-blue: 217 91% 60%;
@@ -117,21 +117,21 @@
     --success: 160 100% 42%;
     --success-foreground: 0 0% 100%;
 
-    --border: 217 33% 27%;
-    --input: 217 33% 27%;
-    --ring: 217 91% 60%;
+    --border: 224 15% 14%;
+    --input: 224 15% 14%;
+    --ring: 24 95% 53%;
 
-    --border-hover: 216 30% 34%;
+    --border-hover: 224 15% 20%;
 
-    --sidebar-background: 217 37% 9%;
-    --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 217 91% 60%;
+    --sidebar-background: 224 15% 8%;
+    --sidebar-foreground: 220 10% 90%;
+    --sidebar-primary: 24 95% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 218 29% 24%;
+    --sidebar-accent: 224 15% 14%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 217 33% 27%;
-    --sidebar-ring: 217 91% 60%;
-    --sidebar-muted: 220 19% 63%;
+    --sidebar-border: 224 15% 12%;
+    --sidebar-ring: 24 95% 53%;
+    --sidebar-muted: 220 10% 65%;
   }
 
   .theme-glass {
@@ -144,10 +144,10 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    --primary: 221 83% 53%;
+    --primary: 24 95% 53%;
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 221 83% 49%;
-    --primary-active: 221 83% 45%;
+    --primary-hover: 24 95% 58%;
+    --primary-active: 24 95% 48%;
 
     --secondary: 210 40% 96%;
     --secondary-foreground: 222 47% 11%;
@@ -171,7 +171,7 @@
 
     --border: 214 32% 89%;
     --input: 214 32% 89%;
-    --ring: 221 83% 53%;
+    --ring: 24 95% 53%;
 
     --border-hover: 215 20% 78%;
 
@@ -179,21 +179,21 @@
 
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 221 83% 53%;
+    --sidebar-primary: 24 95% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 210 40% 96%;
     --sidebar-accent-foreground: 222 47% 11%;
     --sidebar-border: 214 32% 89%;
-    --sidebar-ring: 221 83% 53%;
+    --sidebar-ring: 24 95% 53%;
     --sidebar-muted: 215 16% 47%;
 
-    --chart-1: 221 83% 53%;
-    --chart-2: 199 89% 48%;
+    --chart-1: 24 95% 53%;
+    --chart-2: 142 70% 50%;
     --chart-3: 160 84% 34%;
     --chart-4: 38 92% 46%;
     --chart-5: 280 65% 62%;
 
-    --status-scheduled: 221 83% 53%;
+    --status-scheduled: 24 95% 53%;
     --status-confirmed: 199 89% 42%;
     --status-completed: 160 84% 34%;
     --status-cancelled: 0 84% 56%;
@@ -206,46 +206,46 @@
   }
 
   .theme-glass.dark {
-    --background: 222 47% 8%;
-    --foreground: 210 40% 98%;
+    --background: 224 15% 6%;
+    --foreground: 0 0% 100%;
 
-    --card: 222 47% 10%;
-    --card-foreground: 210 40% 98%;
+    --card: 224 15% 10%;
+    --card-foreground: 0 0% 100%;
 
-    --popover: 222 47% 10%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 224 15% 10%;
+    --popover-foreground: 0 0% 100%;
 
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 11%;
-    --primary-hover: 216 91% 64%;
-    --primary-active: 218 91% 56%;
+    --primary: 24 95% 53%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 24 95% 58%;
+    --primary-active: 24 95% 48%;
 
-    --secondary: 222 47% 12%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 224 10% 14%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 222 47% 14%;
-    --muted-foreground: 215 20% 70%;
+    --muted: 224 10% 14%;
+    --muted-foreground: 220 10% 65%;
 
-    --text-muted: 215 20% 65%;
+    --text-muted: 220 10% 65%;
 
-    --accent: 222 47% 14%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 224 10% 14%;
+    --accent-foreground: 0 0% 100%;
 
-    --border: 222 47% 18%;
-    --input: 222 47% 18%;
-    --ring: 217 91% 60%;
+    --border: 224 15% 14%;
+    --input: 224 15% 14%;
+    --ring: 24 95% 53%;
 
-    --border-hover: 222 47% 26%;
+    --border-hover: 224 15% 20%;
 
-    --sidebar-background: 222 47% 9%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 222 47% 11%;
-    --sidebar-accent: 222 47% 14%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 222 47% 16%;
-    --sidebar-ring: 217 91% 60%;
-    --sidebar-muted: 215 20% 70%;
+    --sidebar-background: 224 15% 8%;
+    --sidebar-foreground: 220 10% 90%;
+    --sidebar-primary: 24 95% 53%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 224 15% 14%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 224 15% 12%;
+    --sidebar-ring: 24 95% 53%;
+    --sidebar-muted: 220 10% 65%;
   }
 }
 
@@ -273,6 +273,15 @@
     @apply bg-card/80 backdrop-blur-md border border-border/60 shadow-sm;
   }
 
+  /* Dark mode background gradients */
+  .dark body {
+    background: 
+      radial-gradient(circle at 15% 15%, rgba(249, 115, 22, 0.08) 0%, transparent 40%),
+      radial-gradient(circle at 85% 30%, rgba(59, 130, 246, 0.05) 0%, transparent 40%),
+      hsl(var(--background));
+    background-attachment: fixed;
+  }
+
   .theme-glass body {
     background:
       radial-gradient(900px 600px at 12% 10%, rgba(59, 130, 246, 0.10), transparent 55%),
@@ -283,10 +292,10 @@
 
   .theme-glass.dark body {
     background:
-      radial-gradient(900px 600px at 12% 10%, rgba(59, 130, 246, 0.18), transparent 55%),
-      radial-gradient(800px 600px at 85% 20%, rgba(99, 102, 241, 0.14), transparent 50%),
-      radial-gradient(900px 700px at 35% 95%, rgba(16, 185, 129, 0.10), transparent 55%),
+      radial-gradient(circle at 15% 15%, rgba(249, 115, 22, 0.08) 0%, transparent 40%),
+      radial-gradient(circle at 85% 30%, rgba(59, 130, 246, 0.05) 0%, transparent 40%),
       hsl(var(--background));
+    background-attachment: fixed;
   }
 
   .theme-glass .page-title {
@@ -484,6 +493,19 @@
     color: hsl(var(--foreground));
   }
 
+  .theme-glass .theme-toggle-3d:hover .theme-toggle-3d__surface {
+    transform: translateY(-4px);
+    box-shadow:
+      0 14px 28px rgba(15, 23, 42, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.70);
+  }
+
+  .theme-glass .theme-toggle-3d:hover .theme-toggle-3d__icon {
+    box-shadow:
+      0 14px 28px rgba(15, 23, 42, 0.16),
+      inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  }
+
   .theme-glass .theme-toggle-3d.is-dark {
     background: linear-gradient(180deg, hsl(var(--card) / 0.55), hsl(var(--card) / 0.35));
     box-shadow:
@@ -520,27 +542,66 @@
   }
 
   .stat-card {
-    background-image: linear-gradient(135deg, #2d3f56 0%, #1f2d3f 100%);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    @apply rounded-lg border border-border p-6 transition-all duration-200;
+    background: linear-gradient(145deg, hsl(var(--card)), hsl(var(--background)));
+    box-shadow: 
+      0 4px 6px -1px rgba(0, 0, 0, 0.5),
+      0 2px 4px -1px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    @apply rounded-xl border border-white/5 p-6 transition-all duration-300;
   }
 
   .stat-card:hover {
-    background-image: linear-gradient(135deg, #344a63 0%, #243447 100%);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    transform: scale(1.02);
-    border-color: hsl(var(--border-hover));
+    box-shadow: 
+      0 10px 15px -3px rgba(0, 0, 0, 0.6),
+      0 4px 6px -2px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+    border-color: hsl(var(--primary) / 0.3);
+  }
+
+  .primary-gradient-card {
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(24, 95%, 45%));
+    color: white;
+    box-shadow: 
+      0 10px 20px -5px hsl(var(--primary) / 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    @apply rounded-xl border-none p-6 relative overflow-hidden;
+  }
+
+  .primary-gradient-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(circle at top right, rgba(255,255,255,0.2), transparent 60%);
+    pointer-events: none;
   }
 
   .ventor-card {
-    background-image: linear-gradient(135deg, #2d3f56 0%, #1f2d3f 100%);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    background: linear-gradient(145deg, hsl(var(--card)), hsl(var(--background)));
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+    @apply rounded-xl border border-white/5 p-4 transition-all duration-200;
   }
 
   .ventor-card:hover {
-    background-image: linear-gradient(135deg, #344a63 0%, #243447 100%);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    border-color: hsl(var(--border-hover));
+    transform: translateY(-2px);
+    border-color: hsl(var(--primary) / 0.3);
+    box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5);
+  }
+
+  .dashboard-panel {
+    background: linear-gradient(145deg, hsl(var(--card)), hsl(var(--background)));
+    box-shadow: 
+      0 4px 6px -1px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    @apply rounded-xl border border-white/5 transition-all duration-300;
+  }
+  
+  .dashboard-panel:hover {
+    border-color: hsl(var(--primary) / 0.2);
+    box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.4);
   }
 
   .theme-glass .stat-card,
@@ -556,6 +617,12 @@
     backdrop-filter: blur(14px);
   }
 
+  .theme-glass .primary-gradient-card {
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(24, 95%, 45%));
+    color: white;
+    border: none;
+  }
+
   .theme-glass .stat-card:hover,
   .theme-glass .ventor-card:hover {
     background:
@@ -565,6 +632,16 @@
       0 18px 44px rgba(15, 23, 42, 0.12);
     transform: translateY(-1px);
     border-color: hsl(var(--border-hover) / 0.8);
+  }
+
+  .theme-glass .primary-gradient-card:hover {
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(24, 95%, 45%));
+    color: white;
+    border: none;
+    box-shadow:
+      0 16px 32px rgba(15, 23, 42, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.24);
+    transform: translateY(-1px);
   }
 
   .theme-glass .table-surface {

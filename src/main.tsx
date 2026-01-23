@@ -9,6 +9,7 @@ try {
   const storedMode = localStorage.getItem("color-mode");
   if (storedMode === "dark") document.documentElement.classList.add("dark");
   if (storedMode === "light") document.documentElement.classList.remove("dark");
+  if (!storedMode) document.documentElement.classList.add("dark");
 } catch {
   // ignore
 }

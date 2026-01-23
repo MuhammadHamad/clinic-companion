@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Header } from '@/components/layout/Header';
 import {
   DollarSign,
@@ -14,6 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useDashboard } from '@/hooks';
@@ -28,8 +29,11 @@ const statusColors: Record<string, string> = {
   no_show: 'bg-muted text-muted-foreground border-border',
 };
 
+type RevenueRange = 'week' | 'month' | 'year' | 'allTime';
+
 export default function Dashboard() {
-  const { stats, todayAppointments, revenueData, isLoading, isRefreshing, lastUpdated, refresh } = useDashboard();
+  const { stats, todayAppointments, revenueSeries, isLoading, isRefreshing, lastUpdated, refresh } = useDashboard();
+  const [revenueRange, setRevenueRange] = useState<RevenueRange>('week');
 
   const formatTime12h = (time: string) => {
     const s = String(time || '').trim();
@@ -43,20 +47,18 @@ export default function Dashboard() {
     return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   };
 
-  // Use the trend from state directly so the bar aligns with the real current month index
-  const monthlyTrendData = useMemo(
-    () => stats.year.monthly_trend || [],
-    [stats.year.monthly_trend]
-  );
+  const revenueChartData = useMemo(() => {
+    const series = revenueSeries?.[revenueRange] || [];
+    return series;
+  }, [revenueSeries, revenueRange]);
 
-  // Compute a sensible Y-axis max in 100k steps so the bar is not always full height
-  const monthlyAxisMax = useMemo(() => {
-    if (!monthlyTrendData.length) return 500000; // default 500k when no data yet
-    const maxRevenue = Math.max(...monthlyTrendData.map((m) => m.revenue || 0), 0);
-    const step = 100000; // 100k steps
+  const revenueAxisMax = useMemo(() => {
+    if (!revenueChartData.length) return 500000;
+    const maxRevenue = Math.max(...revenueChartData.map((m) => m.revenue || 0), 0);
+    const step = 100000;
     if (maxRevenue === 0) return 500000;
-    return Math.max(step * 5, Math.ceil(maxRevenue / step) * step); // at least 500k
-  }, [monthlyTrendData]);
+    return Math.max(step * 5, Math.ceil(maxRevenue / step) * step);
+  }, [revenueChartData]);
 
   if (isLoading) {
     return (
@@ -104,20 +106,21 @@ export default function Dashboard() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="stat-card">
-            <CardContent className="p-4 sm:p-6">
+          <Card className="primary-gradient-card group col-span-1 sm:col-span-2 lg:col-span-1">
+            <CardContent className="p-0">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="card-stat-label">Today's Revenue</p>
-                  <p className="card-stat-value mt-1">
+                  <p className="text-white/80 font-medium">Today's Revenue</p>
+                  <p className="text-3xl font-bold mt-2 text-white">
                     Rs. {stats.today.revenue.toLocaleString()}
                   </p>
                 </div>
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <DollarSign className="h-5 w-5 text-primary" />
+                <div className="relative h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center transition-all duration-300 group-hover:-translate-y-1 group-hover:rotate-6 group-hover:bg-white/30 group-hover:shadow-[0_14px_28px_rgba(0,0,0,0.28)]">
+                  <span className="absolute inset-0 rounded-xl bg-white/30 blur-lg opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                  <DollarSign className="relative z-10 h-5 w-5 text-white transition-transform duration-300 group-hover:scale-110" />
                 </div>
               </div>
-              <div className="mt-4 flex items-center gap-1 text-sm text-muted-foreground">
+              <div className="mt-6 flex items-center gap-2 text-sm text-white/70 bg-black/20 p-2 rounded-lg w-fit">
                 <TrendingUp className="h-4 w-4" />
                 <span>From payments today</span>
               </div>
@@ -189,7 +192,7 @@ export default function Dashboard() {
 
         {/* Month Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card>
+          <Card className="ventor-card">
             <CardContent className="p-6 flex items-center gap-4">
               <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
                 <TrendingUp className="h-6 w-6 text-primary" />
@@ -201,7 +204,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="ventor-card">
             <CardContent className="p-6 flex items-center gap-4">
               <div className="h-12 w-12 rounded-xl bg-destructive/10 flex items-center justify-center">
                 <FileText className="h-6 w-6 text-destructive" />
@@ -213,7 +216,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="ventor-card">
             <CardContent className="p-6 flex items-center gap-4">
               <div className="h-12 w-12 rounded-xl bg-chart-2/10 flex items-center justify-center">
                 <Package className="h-6 w-6 text-chart-2" />
@@ -228,34 +231,26 @@ export default function Dashboard() {
 
         {/* Charts and Appointments */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Monthly Revenue Trend */}
-          <Card>
+          {/* Revenue */}
+          <Card className="dashboard-panel">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
-              <CardTitle className="text-lg font-semibold">Revenue Trend (12 Months)</CardTitle>
-              <div className="text-right">
-                <p className="text-xs text-muted-foreground">Growth</p>
-                <p className={cn(
-                  "text-sm font-semibold",
-                  stats.year.previous_month > 0 && stats.year.current_month > stats.year.previous_month 
-                    ? "text-success" 
-                    : stats.year.previous_month > 0 && stats.year.current_month < stats.year.previous_month
-                    ? "text-destructive"
-                    : "text-muted-foreground"
-                )}>
-                  {stats.year.previous_month > 0 
-                    ? `${((stats.year.current_month - stats.year.previous_month) / stats.year.previous_month * 100).toFixed(1)}%`
-                    : "N/A"
-                  }
-                </p>
-              </div>
+              <CardTitle className="text-lg font-semibold">Revenue</CardTitle>
+              <Tabs value={revenueRange} onValueChange={(v) => setRevenueRange(v as RevenueRange)}>
+                <TabsList className="h-9">
+                  <TabsTrigger value="week" className="text-xs">Week</TabsTrigger>
+                  <TabsTrigger value="month" className="text-xs">Month</TabsTrigger>
+                  <TabsTrigger value="year" className="text-xs">Year</TabsTrigger>
+                  <TabsTrigger value="allTime" className="text-xs">All Time</TabsTrigger>
+                </TabsList>
+              </Tabs>
             </CardHeader>
             <CardContent>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={monthlyTrendData}>
+                  <BarChart data={revenueChartData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                     <XAxis 
-                      dataKey="month" 
+                      dataKey="label" 
                       axisLine={false} 
                       tickLine={false}
                       tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
@@ -264,9 +259,9 @@ export default function Dashboard() {
                       axisLine={false} 
                       tickLine={false}
                       tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                      domain={[0, monthlyAxisMax]}
+                      domain={[0, revenueAxisMax]}
                       ticks={Array.from(
-                        { length: Math.floor(monthlyAxisMax / 100000) + 1 },
+                        { length: Math.floor(revenueAxisMax / 100000) + 1 },
                         (_, i) => i * 100000
                       )}
                       tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
@@ -307,7 +302,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
           {/* Today's Appointments */}
-          <Card className="h-[420px] flex flex-col">
+          <Card className="dashboard-panel h-[420px] flex flex-col">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
               <CardTitle className="text-lg font-semibold">Today's Appointments</CardTitle>
               <Button variant="ghost" size="sm" asChild>
@@ -351,47 +346,6 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Weekly Revenue Chart */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-semibold">Revenue Trend (Last 7 Days)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={revenueData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis 
-                    dataKey="day" 
-                    axisLine={false} 
-                    tickLine={false}
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                  />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false}
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                    tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-                    }}
-                    formatter={(value: number) => [`Rs. ${value.toLocaleString()}`, 'Revenue']}
-                  />
-                  <Bar 
-                    dataKey="revenue" 
-                    fill="hsl(var(--primary))" 
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

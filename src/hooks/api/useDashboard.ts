@@ -55,6 +55,12 @@ export function useDashboard() {
           stats: defaultStats,
           todayAppointments: [],
           revenueData: [],
+          revenueSeries: {
+            week: [],
+            month: [],
+            year: [],
+            allTime: [],
+          },
         };
       }
 
@@ -66,15 +72,8 @@ export function useDashboard() {
       const todayEnd = `${today}T23:59:59`;
       const startOfMonthTs = `${startOfMonth}T00:00:00`;
       const startOfYearTs = `${startOfYear}T00:00:00`;
-      
-      // Generate month keys for the current calendar year (Jan–Dec)
-      const currentDate = new Date();
-      const currentYear = currentDate.getFullYear();
-      const currentMonthIndex = currentDate.getMonth(); // 0 = Jan, 11 = Dec
-      const last12Months = Array.from({ length: 12 }, (_, monthIndex) => {
-        const monthNumber = String(monthIndex + 1).padStart(2, '0');
-        return `${currentYear}-${monthNumber}`; // YYYY-MM for each month in the year
-      });
+      const startOfAllTime = formatLocalDate(new Date(now.getFullYear() - 4, 0, 1));
+      const startOfAllTimeTs = `${startOfAllTime}T00:00:00`;
 
       // Parallel fetch all dashboard data
       const [
@@ -87,7 +86,9 @@ export function useDashboard() {
         treatmentsResult,
         lowStockResult,
         overdueResult,
-        weekPaymentsResult
+        weekPaymentsResult,
+        monthPaymentsTrendResult,
+        allTimePaymentsResult
       ] = await Promise.all([
         // Today's appointments with patient info
         supabase
@@ -104,6 +105,7 @@ export function useDashboard() {
         supabase
           .from('patients')
           .select('*', { count: 'exact', head: true })
+          .eq('clinic_id', activeClinicId)
           .gte('created_at', `${today}T00:00:00`)
           .lte('created_at', `${today}T23:59:59`),
         
@@ -111,6 +113,7 @@ export function useDashboard() {
         supabase
           .from('payments')
           .select('amount')
+          .eq('clinic_id', activeClinicId)
           .gte('created_at', todayStart)
           .lte('created_at', todayEnd),
         
@@ -118,18 +121,21 @@ export function useDashboard() {
         supabase
           .from('payments')
           .select('amount')
+          .eq('clinic_id', activeClinicId)
           .gte('created_at', startOfMonthTs),
         
         // Year's revenue + data for monthly trend
         supabase
           .from('payments')
           .select('amount, payment_date, created_at')
+          .eq('clinic_id', activeClinicId)
           .gte('created_at', startOfYearTs),
         
         // Outstanding invoices
         supabase
           .from('invoices')
           .select('balance')
+          .eq('clinic_id', activeClinicId)
           .neq('status', 'paid'),
         
         // Month's completed appointments
@@ -144,12 +150,14 @@ export function useDashboard() {
         supabase
           .from('inventory_items')
           .select('*', { count: 'exact', head: true })
+          .eq('clinic_id', activeClinicId)
           .in('status', ['low_stock', 'out_of_stock']),
         
         // Overdue invoices
         supabase
           .from('invoices')
           .select('*', { count: 'exact', head: true })
+          .eq('clinic_id', activeClinicId)
           .eq('status', 'overdue'),
         
         // Last 7 days revenue for chart
@@ -163,9 +171,25 @@ export function useDashboard() {
           return supabase
             .from('payments')
             .select('amount, payment_date, created_at')
+            .eq('clinic_id', activeClinicId)
             .gte('created_at', `${last7Days[0]}T00:00:00`)
             .lte('created_at', `${last7Days[6]}T23:59:59`);
-        })()
+        })(),
+
+        // Current month daily revenue (for chart)
+        supabase
+          .from('payments')
+          .select('amount, payment_date, created_at')
+          .eq('clinic_id', activeClinicId)
+          .gte('created_at', startOfMonthTs)
+          .lte('created_at', todayEnd),
+
+        // All time (last 5 years) revenue (for chart)
+        supabase
+          .from('payments')
+          .select('amount, payment_date, created_at')
+          .eq('clinic_id', activeClinicId)
+          .gte('created_at', startOfAllTimeTs)
       ]);
 
       // Process appointments data
@@ -202,29 +226,34 @@ export function useDashboard() {
       const yearRevenue = (yearPaymentsResult.data || []).reduce((sum, p: any) => sum + Number(p.amount), 0);
       const outstanding = (outstandingResult.data || []).reduce((sum, i) => sum + Number(i.balance), 0);
 
-      // Calculate monthly trend: show current month's revenue, keep other months at 0 for now
-      const currentMonthKey = today.slice(0, 7); // YYYY-MM
-      const monthlyTrend = last12Months.map((monthKey) => {
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const monthDate = new Date(monthKey + '-01');
-        const isCurrentMonth = monthKey === currentMonthKey;
+      const getPaymentDate = (p: any): Date | null => {
+        const raw = p?.payment_date || (p?.created_at ? String(p.created_at).split('T')[0] : '');
+        if (!raw) return null;
+        const d = new Date(raw);
+        return Number.isNaN(d.getTime()) ? null : d;
+      };
 
-        return {
-          month: monthNames[monthDate.getMonth()],
-          revenue: isCurrentMonth ? monthRevenue : 0,
-        };
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+      // Calculate monthly trend (current calendar year) from payments
+      const monthTotals = Array.from({ length: 12 }, () => 0);
+      (yearPaymentsResult.data || []).forEach((p: any) => {
+        const d = getPaymentDate(p);
+        if (!d) return;
+        const idx = d.getMonth();
+        if (idx < 0 || idx > 11) return;
+        monthTotals[idx] += Number(p.amount) || 0;
       });
 
+      const monthlyTrend = monthTotals.map((revenue, idx) => ({
+        month: monthNames[idx],
+        revenue,
+      }));
+
       // Current and previous month revenue based on the trend
-      const currentMonthIndexInTrend = last12Months.indexOf(currentMonthKey);
-      const currentMonthRevenue =
-        currentMonthIndexInTrend !== -1
-          ? monthlyTrend[currentMonthIndexInTrend].revenue
-          : monthRevenue;
-      const previousMonthRevenue =
-        currentMonthIndexInTrend > 0
-          ? monthlyTrend[currentMonthIndexInTrend - 1].revenue
-          : 0;
+      const currentMonthIndexInTrend = now.getMonth();
+      const currentMonthRevenue = monthlyTrend[currentMonthIndexInTrend]?.revenue ?? monthRevenue;
+      const previousMonthRevenue = currentMonthIndexInTrend > 0 ? monthlyTrend[currentMonthIndexInTrend - 1]?.revenue ?? 0 : 0;
 
       // Calculate appointments stats
       const scheduledOrConfirmed = mappedAppointments.filter(
@@ -276,10 +305,52 @@ export function useDashboard() {
         };
       });
 
+      // Current month daily revenue series
+      const monthDays: string[] = [];
+      for (let d = new Date(now.getFullYear(), now.getMonth(), 1); d <= now; d.setDate(d.getDate() + 1)) {
+        monthDays.push(formatLocalDate(new Date(d)));
+      }
+
+      const monthSeries = monthDays.map((date) => {
+        const total = (monthPaymentsTrendResult.data || [])
+          .filter((p: any) => (p.payment_date || (p.created_at ? String(p.created_at).split('T')[0] : '')) === date)
+          .reduce((sum, p) => sum + Number(p.amount), 0);
+        return {
+          label: String(Number(date.split('-')[2]) || date),
+          revenue: total,
+        };
+      });
+
+      const yearSeries = monthlyTrend.map((m) => ({
+        label: m.month,
+        revenue: m.revenue,
+      }));
+
+      const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - 4 + i);
+      const allTimeTotals = new Map<number, number>(years.map((y) => [y, 0] as const));
+      (allTimePaymentsResult.data || []).forEach((p: any) => {
+        const d = getPaymentDate(p);
+        if (!d) return;
+        const y = d.getFullYear();
+        if (!allTimeTotals.has(y)) return;
+        allTimeTotals.set(y, (allTimeTotals.get(y) || 0) + (Number(p.amount) || 0));
+      });
+
+      const allTimeSeries = years.map((y) => ({
+        label: String(y),
+        revenue: allTimeTotals.get(y) || 0,
+      }));
+
       return {
         stats,
         todayAppointments: mappedAppointments,
         revenueData: chartData,
+        revenueSeries: {
+          week: chartData.map((d) => ({ label: d.day, revenue: d.revenue })),
+          month: monthSeries,
+          year: yearSeries,
+          allTime: allTimeSeries,
+        },
       };
     } catch (error: any) {
       logger.error('Error fetching dashboard data:', error);
@@ -316,6 +387,7 @@ export function useDashboard() {
     stats: query.data?.stats ?? defaultStats,
     todayAppointments: query.data?.todayAppointments ?? [],
     revenueData: query.data?.revenueData ?? [],
+    revenueSeries: query.data?.revenueSeries ?? { week: [], month: [], year: [], allTime: [] },
     isLoading: query.isLoading && !query.data,
     isRefreshing: query.isFetching && !!query.data,
     lastUpdated,
