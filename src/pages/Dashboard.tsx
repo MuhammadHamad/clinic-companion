@@ -233,16 +233,18 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Revenue */}
           <Card className="dashboard-panel">
-            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardHeader className="pb-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-lg font-semibold">Revenue</CardTitle>
-              <Tabs value={revenueRange} onValueChange={(v) => setRevenueRange(v as RevenueRange)}>
-                <TabsList className="h-9">
-                  <TabsTrigger value="week" className="text-xs">Week</TabsTrigger>
-                  <TabsTrigger value="month" className="text-xs">Month</TabsTrigger>
-                  <TabsTrigger value="year" className="text-xs">Year</TabsTrigger>
-                  <TabsTrigger value="allTime" className="text-xs">All Time</TabsTrigger>
-                </TabsList>
-              </Tabs>
+              <div className="w-full sm:w-auto overflow-x-auto">
+                <Tabs value={revenueRange} onValueChange={(v) => setRevenueRange(v as RevenueRange)}>
+                  <TabsList className="h-9 w-max min-w-full justify-start">
+                    <TabsTrigger value="week" className="text-xs">Week</TabsTrigger>
+                    <TabsTrigger value="month" className="text-xs">Month</TabsTrigger>
+                    <TabsTrigger value="year" className="text-xs">Year</TabsTrigger>
+                    <TabsTrigger value="allTime" className="text-xs">All Time</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="h-64">
