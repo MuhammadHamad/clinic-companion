@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { Invoice, InvoiceItem, InvoiceStatus, Patient, PaymentMethod } from '@/types';
 import { useToast } from '@/hooks';
+import { useTenant } from '@/contexts/TenantContext';
 
 type InvoiceSummary = { balance: number; lastVisit: string | null };
 
@@ -18,6 +19,7 @@ export function useInvoices(options?: UseInvoicesOptions) {
   const hasLoadedOnceRef = useRef(false);
   const { toast } = useToast();
   const autoFetch = options?.autoFetch ?? true;
+  const { activeClinicId } = useTenant();
 
   const mapRowToInvoice = (inv: any): Invoice => ({
     id: inv.id,
@@ -67,6 +69,12 @@ export function useInvoices(options?: UseInvoicesOptions) {
         setIsRefreshing(true);
       }
 
+      if (!activeClinicId) {
+        setInvoices([]);
+        setLastUpdated(new Date());
+        return;
+      }
+
       const { data, error } = await supabase
         .from('invoices')
         .select(`
@@ -74,6 +82,7 @@ export function useInvoices(options?: UseInvoicesOptions) {
           patient:patients(*),
           items:invoice_items(*)
         `)
+        .eq('clinic_id', activeClinicId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -92,16 +101,21 @@ export function useInvoices(options?: UseInvoicesOptions) {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [toast]);
+  }, [activeClinicId, toast]);
 
   const fetchInvoiceSummariesByPatientIds = useCallback(async (patientIds: string[]) => {
     try {
       const ids = (patientIds || []).filter(Boolean);
       if (ids.length === 0) return { success: true, data: {} as Record<string, InvoiceSummary> };
 
+      if (!activeClinicId) {
+        return { success: true, data: {} as Record<string, InvoiceSummary> };
+      }
+
       const { data, error } = await supabase
         .from('invoices')
         .select('id, patient_id, balance, invoice_date, created_at')
+        .eq('clinic_id', activeClinicId)
         .in('patient_id', ids)
         .order('created_at', { ascending: false });
 
@@ -128,10 +142,12 @@ export function useInvoices(options?: UseInvoicesOptions) {
       logger.error('Error fetching invoice summaries:', error);
       return { success: false, error: error.message };
     }
-  }, []);
+  }, [activeClinicId]);
 
   const fetchInvoiceById = useCallback(async (invoiceId: string) => {
     try {
+      if (!activeClinicId) return { success: false, error: 'No active clinic selected' };
+
       const { data, error } = await supabase
         .from('invoices')
         .select(`
@@ -139,6 +155,7 @@ export function useInvoices(options?: UseInvoicesOptions) {
           patient:patients(*),
           items:invoice_items(*)
         `)
+        .eq('clinic_id', activeClinicId)
         .eq('id', invoiceId)
         .single();
 
@@ -150,10 +167,12 @@ export function useInvoices(options?: UseInvoicesOptions) {
       logger.error('Error fetching invoice by id:', error);
       return { success: false, error: error.message };
     }
-  }, []);
+  }, [activeClinicId]);
 
   const fetchInvoicesForPatient = useCallback(async (patientId: string) => {
     try {
+      if (!activeClinicId) return { success: true, data: [] };
+
       const { data, error } = await supabase
         .from('invoices')
         .select(`
@@ -161,6 +180,7 @@ export function useInvoices(options?: UseInvoicesOptions) {
           patient:patients(*),
           items:invoice_items(*)
         `)
+        .eq('clinic_id', activeClinicId)
         .eq('patient_id', patientId)
         .order('created_at', { ascending: false });
 
@@ -171,7 +191,7 @@ export function useInvoices(options?: UseInvoicesOptions) {
       logger.error('Error fetching invoices for patient:', error);
       return { success: false, error: error.message };
     }
-  }, []);
+  }, [activeClinicId]);
 
   const createInvoice = async (invoiceData: {
     patient_id: string;
@@ -182,12 +202,17 @@ export function useInvoices(options?: UseInvoicesOptions) {
     notes?: string;
   }) => {
     try {
+      if (!activeClinicId) {
+        return { success: false, error: 'No active clinic selected' };
+      }
+
       const subtotal = invoiceData.items.reduce((sum, item) => sum + item.total, 0);
       const total_amount = subtotal - invoiceData.discount_amount + invoiceData.tax_amount;
 
       const { data: invoice, error: invoiceError } = await supabase
         .from('invoices')
         .insert({
+          clinic_id: activeClinicId,
           patient_id: invoiceData.patient_id,
           subtotal,
           discount_amount: invoiceData.discount_amount,
@@ -230,6 +255,7 @@ export function useInvoices(options?: UseInvoicesOptions) {
           patient:patients(*),
           items:invoice_items(*)
         `)
+        .eq('clinic_id', activeClinicId)
         .eq('id', invoice.id)
         .single();
 
@@ -250,6 +276,10 @@ export function useInvoices(options?: UseInvoicesOptions) {
     notes?: string;
   }) => {
     try {
+      if (!activeClinicId) {
+        return { success: false, error: 'No active clinic selected' };
+      }
+
       const invoice = invoices.find((i) => i.id === invoiceId);
 
       let invoiceRow: {
@@ -280,6 +310,7 @@ export function useInvoices(options?: UseInvoicesOptions) {
         const { data, error } = await supabase
           .from('invoices')
           .select('id, patient_id, subtotal, discount_amount, tax_amount, total_amount, amount_paid, balance, status')
+          .eq('clinic_id', activeClinicId)
           .eq('id', invoiceId)
           .single();
 
@@ -305,6 +336,7 @@ export function useInvoices(options?: UseInvoicesOptions) {
       const { error: paymentError } = await supabase
         .from('payments')
         .insert({
+          clinic_id: activeClinicId,
           invoice_id: invoiceId,
           patient_id: invoiceRow.patient_id,
           payment_date: paymentDate,
@@ -328,6 +360,7 @@ export function useInvoices(options?: UseInvoicesOptions) {
           balance: Math.max(0, newBalance),
           status: newStatus,
         })
+        .eq('clinic_id', activeClinicId)
         .eq('id', invoiceId);
 
       if (updateError) throw updateError;
@@ -402,6 +435,7 @@ export function useInvoices(options?: UseInvoicesOptions) {
           balance,
           status,
         })
+        .eq('clinic_id', activeClinicId)
         .eq('id', invoiceId);
 
       if (error) throw error;
@@ -432,6 +466,7 @@ export function useInvoices(options?: UseInvoicesOptions) {
       const { error } = await supabase
         .from('invoices')
         .delete()
+        .eq('clinic_id', activeClinicId)
         .eq('id', id);
 
       if (error) throw error;

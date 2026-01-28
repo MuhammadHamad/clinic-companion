@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { Patient } from '@/types';
 import { useToast } from '@/hooks';
+import { useTenant } from '@/contexts/TenantContext';
 
 type PatientsPageParams = {
   page: number;
@@ -21,6 +22,7 @@ export function usePatients(options?: { autoFetch?: boolean }) {
   const [pagedTotalCount, setPagedTotalCount] = useState<number>(0);
   const [isPageLoading, setIsPageLoading] = useState(false);
   const { toast } = useToast();
+  const { activeClinicId } = useTenant();
 
   const mapRowToPatient = (p: any): Patient => ({
     id: p.id,
@@ -56,9 +58,16 @@ export function usePatients(options?: { autoFetch?: boolean }) {
         setIsRefreshing(true);
       }
 
+      if (!activeClinicId) {
+        setPatients([]);
+        setLastUpdated(new Date());
+        return;
+      }
+
       const { data, error } = await supabase
         .from('patients')
         .select('*')
+        .eq('clinic_id', activeClinicId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -77,7 +86,7 @@ export function usePatients(options?: { autoFetch?: boolean }) {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [toast]);
+  }, [activeClinicId, toast]);
 
   const fetchPatientsPage = useCallback(
     async ({ page, pageSize, searchQuery, statusFilter }: PatientsPageParams) => {
@@ -89,9 +98,16 @@ export function usePatients(options?: { autoFetch?: boolean }) {
         const from = (safePage - 1) * safePageSize;
         const to = from + safePageSize - 1;
 
+        if (!activeClinicId) {
+          setPagedPatients([]);
+          setPagedTotalCount(0);
+          return;
+        }
+
         let query = supabase
           .from('patients')
           .select('*', { count: 'exact' })
+          .eq('clinic_id', activeClinicId)
           .order('created_at', { ascending: false });
 
         const status = (statusFilter || 'all').trim();
@@ -135,7 +151,7 @@ export function usePatients(options?: { autoFetch?: boolean }) {
         setIsPageLoading(false);
       }
     },
-    [toast],
+    [activeClinicId, toast],
   );
 
   const createPatient = async (patientData: Omit<Patient, 'id' | 'patient_number' | 'created_at' | 'registration_date'>) => {
