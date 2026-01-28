@@ -28,11 +28,13 @@ interface NavItem {
   allowedRoles?: AppRole[];
 }
 
+const usersUiEnabled = import.meta.env.VITE_ENABLE_USERS_UI === 'true';
+
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Customers', href: '/patients', icon: Users },
   { name: 'Appointments', href: '/appointments', icon: CalendarDays },
-  { name: 'Users', href: '/users', icon: Users, allowedRoles: ['admin'] },
+  ...(usersUiEnabled ? [{ name: 'Users', href: '/users', icon: Users, allowedRoles: ['admin'] } as NavItem] : []),
   { name: 'Inventory', href: '/inventory', icon: Package, allowedRoles: ['admin'] },
   { name: 'Reports', href: '/reports', icon: BarChart3, allowedRoles: ['admin', 'dentist'] },
 ];
@@ -55,7 +57,7 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
   }
 
   useEffect(() => {
-    if (role === 'admin') {
+    if (usersUiEnabled && role === 'admin') {
       void clinicUsersApi.prefetchList();
     }
   }, [role]);

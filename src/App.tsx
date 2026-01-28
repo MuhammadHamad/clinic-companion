@@ -33,6 +33,8 @@ const SaasClinicRequests = lazy(() => import("./pages/saas/SaasClinicRequests"))
 const SaasClinicInsights = lazy(() => import("./pages/saas/SaasClinicInsights"));
 const SaasSettings = lazy(() => import("./pages/saas/SaasSettings"));
 
+const usersUiEnabled = import.meta.env.VITE_ENABLE_USERS_UI === 'true';
+
 const RouteFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
     <div className="flex flex-col items-center gap-4">
@@ -83,7 +85,7 @@ const App = () => (
                   <Route path="/invoices" element={<Invoices />} />
                   <Route path="/inventory" element={<Inventory />} />
                   <Route path="/reports" element={<Reports />} />
-                  <Route path="/users" element={<Users />} />
+                  {usersUiEnabled && <Route path="/users" element={<Users />} />}
                   <Route path="/settings" element={<Settings />} />
                 </Route>
 
