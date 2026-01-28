@@ -68,12 +68,7 @@ export function useDashboard() {
       const today = formatLocalDate(now);
       const startOfMonth = formatLocalDate(new Date(now.getFullYear(), now.getMonth(), 1));
       const startOfYear = formatLocalDate(new Date(now.getFullYear(), 0, 1));
-      const todayStart = `${today}T00:00:00`;
-      const todayEnd = `${today}T23:59:59`;
-      const startOfMonthTs = `${startOfMonth}T00:00:00`;
-      const startOfYearTs = `${startOfYear}T00:00:00`;
       const startOfAllTime = formatLocalDate(new Date(now.getFullYear() - 4, 0, 1));
-      const startOfAllTimeTs = `${startOfAllTime}T00:00:00`;
 
       // Parallel fetch all dashboard data
       const [
@@ -114,22 +109,23 @@ export function useDashboard() {
           .from('payments')
           .select('amount')
           .eq('clinic_id', activeClinicId)
-          .gte('created_at', todayStart)
-          .lte('created_at', todayEnd),
+          .eq('payment_date', today),
         
         // Month's revenue
         supabase
           .from('payments')
           .select('amount')
           .eq('clinic_id', activeClinicId)
-          .gte('created_at', startOfMonthTs),
+          .gte('payment_date', startOfMonth)
+          .lte('payment_date', today),
         
         // Year's revenue + data for monthly trend
         supabase
           .from('payments')
           .select('amount, payment_date, created_at')
           .eq('clinic_id', activeClinicId)
-          .gte('created_at', startOfYearTs),
+          .gte('payment_date', startOfYear)
+          .lte('payment_date', today),
         
         // Outstanding invoices
         supabase
@@ -166,14 +162,14 @@ export function useDashboard() {
           for (let i = 6; i >= 0; i--) {
             const date = new Date();
             date.setDate(date.getDate() - i);
-            last7Days.push(date.toISOString().split('T')[0]);
+            last7Days.push(formatLocalDate(date));
           }
           return supabase
             .from('payments')
             .select('amount, payment_date, created_at')
             .eq('clinic_id', activeClinicId)
-            .gte('created_at', `${last7Days[0]}T00:00:00`)
-            .lte('created_at', `${last7Days[6]}T23:59:59`);
+            .gte('payment_date', last7Days[0])
+            .lte('payment_date', last7Days[6]);
         })(),
 
         // Current month daily revenue (for chart)
@@ -181,15 +177,15 @@ export function useDashboard() {
           .from('payments')
           .select('amount, payment_date, created_at')
           .eq('clinic_id', activeClinicId)
-          .gte('created_at', startOfMonthTs)
-          .lte('created_at', todayEnd),
+          .gte('payment_date', startOfMonth)
+          .lte('payment_date', today),
 
         // All time (last 5 years) revenue (for chart)
         supabase
           .from('payments')
           .select('amount, payment_date, created_at')
           .eq('clinic_id', activeClinicId)
-          .gte('created_at', startOfAllTimeTs)
+          .gte('payment_date', startOfAllTime)
       ]);
 
       // Process appointments data

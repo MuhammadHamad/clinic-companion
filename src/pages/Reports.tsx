@@ -36,7 +36,7 @@ export default function Reports() {
   const { invoices, fetchInvoices, lastUpdated: invoicesLastUpdated } = useInvoices();
   const { items, fetchItems, fetchCategories, fetchMovements, lastUpdated: inventoryLastUpdated } = useInventory();
   const { patients, fetchPatients, lastUpdated: patientsLastUpdated } = usePatients();
-  const { activeClinic } = useTenant();
+  const { activeClinic, activeClinicId } = useTenant();
   const [activeTab, setActiveTab] = useState<'revenue' | 'outstanding' | 'inventory'>('revenue');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(() => {
@@ -146,9 +146,11 @@ export default function Reports() {
 
     const shouldUsePayments = paymentsStats.totalRevenue > 0;
 
-    invoicesInRange
-      .filter((inv) => (shouldUsePayments ? (inv.status === 'paid' || inv.status === 'partial') : inv.status === 'paid'))
-      .forEach((inv) => {
+    const invoicesForBreakdown = shouldUsePayments
+      ? activeInvoices.filter((inv) => paidByInvoiceId.has(inv.id) && (inv.status === 'paid' || inv.status === 'partial'))
+      : invoicesInRange.filter((inv) => inv.status === 'paid');
+
+    invoicesForBreakdown.forEach((inv) => {
         const targetRevenue = shouldUsePayments ? (paidByInvoiceId.get(inv.id) || 0) : Number(inv.total_amount || 0);
         if (targetRevenue <= 0) return;
 
@@ -183,28 +185,26 @@ export default function Reports() {
     const otherCount = sorted.slice(maxBars - 1).reduce((sum, row) => sum + row.count, 0);
 
     return [...top, { name: 'Other', revenue: otherTotal, count: otherCount }];
-  }, [invoicesInRange, paymentsInRange, paymentsStats.totalRevenue]);
+  }, [activeInvoices, invoicesInRange, paymentsInRange, paymentsStats.totalRevenue]);
 
   // Payment Method Breakdown - aligned with invoice date ranges for consistency
   useEffect(() => {
     const fetchPaymentBreakdown = async () => {
       try {
         setIsLoadingPayments(true);
-        
-        // Get invoice IDs in the selected date range first
-        const invoiceIdsInRange = invoicesInRange.map(inv => inv.id);
-        
-        if (invoiceIdsInRange.length === 0) {
+
+        if (!activeClinicId || !dateRange.start || !dateRange.end) {
           setPaymentsInRange([]);
           setPaymentBreakdown([]);
           return;
         }
 
-        // Fetch payments for these invoices only
         const { data, error } = await supabase
           .from('payments')
           .select('invoice_id, payment_method, amount, payment_date')
-          .in('invoice_id', invoiceIdsInRange);
+          .eq('clinic_id', activeClinicId)
+          .gte('payment_date', dateRange.start)
+          .lte('payment_date', dateRange.end);
 
         if (error) throw error;
 
@@ -236,7 +236,7 @@ export default function Reports() {
     };
 
     fetchPaymentBreakdown();
-  }, [invoicesInRange]);
+  }, [activeClinicId, dateRange.end, dateRange.start]);
 
   // Outstanding Report Data - excluding void invoices
   const outstandingInvoices = activeInvoices.filter(i => i.status !== 'paid');

@@ -1,9 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { Invoice, InvoiceItem, InvoiceStatus, Patient, PaymentMethod } from '@/types';
 import { useToast } from '@/hooks';
 import { useTenant } from '@/contexts/TenantContext';
+
+const formatLocalDate = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 
 type InvoiceSummary = { balance: number; lastVisit: string | null };
 
@@ -17,6 +25,7 @@ export function useInvoices(options?: UseInvoicesOptions) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const hasLoadedOnceRef = useRef(false);
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const autoFetch = options?.autoFetch ?? true;
   const { activeClinicId } = useTenant();
@@ -233,6 +242,7 @@ export function useInvoices(options?: UseInvoicesOptions) {
       const itemsToInsert = invoiceData.items
         .filter(item => item.description)
         .map(item => ({
+          clinic_id: activeClinicId,
           invoice_id: invoice.id,
           description: item.description,
           quantity: item.quantity,
@@ -245,7 +255,10 @@ export function useInvoices(options?: UseInvoicesOptions) {
           .from('invoice_items')
           .insert(itemsToInsert);
 
-        if (itemsError) throw itemsError;
+        if (itemsError) {
+          await supabase.from('invoices').delete().eq('clinic_id', activeClinicId).eq('id', invoice.id);
+          throw itemsError;
+        }
       }
 
       const { data: invoiceWithJoins, error: invoiceFetchError } = await supabase
@@ -330,7 +343,7 @@ export function useInvoices(options?: UseInvoicesOptions) {
         };
       }
 
-      const paymentDate = new Date().toISOString().split('T')[0];
+      const paymentDate = formatLocalDate(new Date());
 
       // Insert payment record
       const { error: paymentError } = await supabase
@@ -378,6 +391,8 @@ export function useInvoices(options?: UseInvoicesOptions) {
             : inv,
         ),
       );
+
+      queryClient.invalidateQueries({ queryKey: ['dashboard', activeClinicId] });
 
       return { success: true };
     } catch (error: any) {
