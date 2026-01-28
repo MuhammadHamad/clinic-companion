@@ -4,6 +4,9 @@ import type { AppRole } from '@/contexts/TenantContext';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
+const USERS_CACHE_KEY = 'clinic_users_cache_v2';
+const USERS_CACHE_MAX_AGE_MS = 5 * 60_000;
+
 const getJwtPayload = (token: string): { iss?: string; exp?: number } | null => {
   try {
     const parts = token.split('.');
@@ -32,6 +35,12 @@ type ClinicUser = {
 };
 
 type ListResponse = {
+  clinicId: string;
+  users: ClinicUser[];
+};
+
+type UsersCachePayload = {
+  ts: number;
   clinicId: string;
   users: ClinicUser[];
 };
@@ -159,9 +168,59 @@ const invoke = async <T>(body: unknown): Promise<T> => {
   return parsed as T;
 };
 
+const readUsersCache = (): UsersCachePayload | null => {
+  try {
+    if (typeof window === 'undefined') return null;
+    const raw = window.localStorage.getItem(USERS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') return null;
+    const obj = parsed as any;
+    if (typeof obj.ts !== 'number') return null;
+    if (!Array.isArray(obj.users)) return null;
+    return {
+      ts: obj.ts,
+      clinicId: typeof obj.clinicId === 'string' ? obj.clinicId : '',
+      users: obj.users as ClinicUser[],
+    };
+  } catch {
+    return null;
+  }
+};
+
+const writeUsersCache = (payload: { clinicId: string; users: ClinicUser[] }) => {
+  try {
+    if (typeof window === 'undefined') return;
+    const next: UsersCachePayload = {
+      ts: Date.now(),
+      clinicId: payload.clinicId,
+      users: payload.users,
+    };
+    window.localStorage.setItem(USERS_CACHE_KEY, JSON.stringify(next));
+  } catch {
+    return;
+  }
+};
+
 export const clinicUsersApi = {
+  getCachedList: (opts?: { maxAgeMs?: number }) => {
+    const cached = readUsersCache();
+    if (!cached) return null;
+    const maxAgeMs = opts?.maxAgeMs ?? USERS_CACHE_MAX_AGE_MS;
+    if (Date.now() - cached.ts > maxAgeMs) return null;
+    return cached;
+  },
   list: async (): Promise<ListResponse> => {
-    return invoke<ListResponse>({ action: 'list' });
+    const res = await invoke<ListResponse>({ action: 'list' });
+    writeUsersCache({ clinicId: res.clinicId, users: res.users || [] });
+    return res;
+  },
+  prefetchList: async (): Promise<void> => {
+    try {
+      await clinicUsersApi.list();
+    } catch {
+      return;
+    }
   },
   create: async (payload: CreatePayload) => {
     return invoke<{ user_id: string; role: AppRole; clinic_id: string | null }>({ action: 'create', payload });

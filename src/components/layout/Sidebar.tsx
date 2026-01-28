@@ -19,6 +19,7 @@ import type { AppRole } from '@/contexts/TenantContext';
 import { useTenant } from '@/contexts/TenantContext';
 import { Button } from '@/components/ui/button';
 import { BrandMark } from '@/components/BrandMark';
+import { clinicUsersApi } from '@/lib/clinicUsersApi';
 
 interface NavItem {
   name: string;
@@ -31,6 +32,7 @@ const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Customers', href: '/patients', icon: Users },
   { name: 'Appointments', href: '/appointments', icon: CalendarDays },
+  { name: 'Users', href: '/users', icon: Users, allowedRoles: ['admin'] },
   { name: 'Inventory', href: '/inventory', icon: Package, allowedRoles: ['admin'] },
   { name: 'Reports', href: '/reports', icon: BarChart3, allowedRoles: ['admin', 'dentist'] },
 ];
@@ -51,6 +53,12 @@ export function Sidebar({ onLogout, user }: SidebarProps) {
   if (isSuperAdmin) {
     return null;
   }
+
+  useEffect(() => {
+    if (role === 'admin') {
+      void clinicUsersApi.prefetchList();
+    }
+  }, [role]);
 
   // Filter navigation based on user role
   const filteredNavigation = navigation.filter((item) => {

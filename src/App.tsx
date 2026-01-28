@@ -21,6 +21,7 @@ const Invoices = lazy(() => import("./pages/Invoices"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Settings = lazy(() => import("./pages/Settings"));
+const Users = lazy(() => import("./pages/Users"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PendingApproval = lazy(() => import("./pages/PendingApproval"));
 
@@ -82,6 +83,7 @@ const App = () => (
                   <Route path="/invoices" element={<Invoices />} />
                   <Route path="/inventory" element={<Inventory />} />
                   <Route path="/reports" element={<Reports />} />
+                  <Route path="/users" element={<Users />} />
                   <Route path="/settings" element={<Settings />} />
                 </Route>
 

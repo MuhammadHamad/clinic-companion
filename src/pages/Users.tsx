@@ -34,37 +34,16 @@ type ClinicUserRow = {
   last_name: unknown;
 };
 
-const USERS_CACHE_KEY = 'clinic_users_cache_v1';
-
-const readUsersCache = (): ClinicUserRow[] => {
-  try {
-    if (typeof window === 'undefined') return [];
-    const raw = window.sessionStorage.getItem(USERS_CACHE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed as ClinicUserRow[];
-  } catch {
-    return [];
-  }
-};
-
-const writeUsersCache = (rows: ClinicUserRow[]) => {
-  try {
-    if (typeof window === 'undefined') return;
-    window.sessionStorage.setItem(USERS_CACHE_KEY, JSON.stringify(rows));
-  } catch {
-    return;
-  }
-};
-
 export default function Users() {
   const { toast } = useToast();
   const { user } = useAuth();
   const { isLoading: isRoleLoading, isAdmin } = useUserRole();
 
   const [isLoading, setIsLoading] = useState(false);
-  const [users, setUsers] = useState<ClinicUserRow[]>(() => readUsersCache());
+  const [users, setUsers] = useState<ClinicUserRow[]>(() => {
+    const cached = clinicUsersApi.getCachedList();
+    return (cached?.users || []) as ClinicUserRow[];
+  });
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [removeState, setRemoveState] = useState<{ open: boolean; user: ClinicUserRow | null }>({ open: false, user: null });
@@ -91,7 +70,6 @@ export default function Users() {
       const res = await clinicUsersApi.list();
       const next = (res.users || []) as ClinicUserRow[];
       setUsers(next);
-      writeUsersCache(next);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to load users';
       toast({ title: 'Error', description: msg, variant: 'destructive' });
