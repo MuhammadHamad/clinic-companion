@@ -3,18 +3,27 @@ import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { TreatmentType } from '@/types';
 import { useToast } from '@/hooks';
+import { useTenant } from '@/contexts/TenantContext';
 
 export function useTreatmentTypes() {
   const [treatmentTypes, setTreatmentTypes] = useState<TreatmentType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const { activeClinicId } = useTenant();
 
   const fetchTreatmentTypes = useCallback(async () => {
     try {
       setIsLoading(true);
+
+      if (!activeClinicId) {
+        setTreatmentTypes([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('treatment_types')
         .select('*')
+        .eq('clinic_id', activeClinicId)
         .eq('is_active', true)
         .order('name');
 
@@ -41,13 +50,18 @@ export function useTreatmentTypes() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [activeClinicId, toast]);
 
   const createTreatmentType = async (typeData: Omit<TreatmentType, 'id'>) => {
     try {
+      if (!activeClinicId) {
+        return { success: false, error: 'No active clinic selected.' };
+      }
+
       const { data, error } = await supabase
         .from('treatment_types')
         .insert({
+          clinic_id: activeClinicId,
           name: typeData.name,
           code: typeData.code || null,
           default_price: typeData.default_price,
@@ -70,6 +84,10 @@ export function useTreatmentTypes() {
 
   const updateTreatmentType = async (id: string, typeData: Partial<Omit<TreatmentType, 'id'>>) => {
     try {
+      if (!activeClinicId) {
+        return { success: false, error: 'No active clinic selected.' };
+      }
+
       const { data, error } = await supabase
         .from('treatment_types')
         .update({
@@ -81,6 +99,7 @@ export function useTreatmentTypes() {
           is_active: typeData.is_active,
         })
         .eq('id', id)
+        .eq('clinic_id', activeClinicId)
         .select('id');
 
       if (error) throw error;
@@ -99,10 +118,15 @@ export function useTreatmentTypes() {
 
   const deleteTreatmentType = async (id: string) => {
     try {
+      if (!activeClinicId) {
+        return { success: false, error: 'No active clinic selected.' };
+      }
+
       const { data, error } = await supabase
         .from('treatment_types')
         .delete()
         .eq('id', id)
+        .eq('clinic_id', activeClinicId)
         .select('id');
 
       if (error) throw error;
