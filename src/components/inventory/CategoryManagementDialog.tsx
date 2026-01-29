@@ -55,8 +55,34 @@ export function CategoryManagementDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          <div>
+            <h4 className="text-sm font-medium mb-2">
+              {editingCategory ? 'Edit Category' : 'Create New Category'}
+            </h4>
+            <form onSubmit={onSubmit} className="space-y-3">
+              <div>
+                <label className="form-label">Category Name *</label>
+                <Input
+                  value={categoryName}
+                  onChange={(e) => onCategoryNameChange(e.target.value)}
+                  placeholder="e.g., Instruments, Materials, Consumables"
+                  required
+                />
+              </div>
+              <div>
+                <label className="form-label">Description</label>
+                <Textarea
+                  value={categoryDescription}
+                  onChange={(e) => onCategoryDescriptionChange(e.target.value)}
+                  placeholder="Optional description"
+                  rows={2}
+                />
+              </div>
+            </form>
+          </div>
+
           {categories.length > 0 && (
-            <div>
+            <div className="border-t pt-4">
               <h4 className="text-sm font-medium mb-2">Existing Categories</h4>
               <div className="space-y-1">
                 {categories.map((cat) => (
@@ -107,32 +133,6 @@ export function CategoryManagementDialog({
               </div>
             </div>
           )}
-
-          <div className="border-t pt-4">
-            <h4 className="text-sm font-medium mb-2">
-              {editingCategory ? 'Edit Category' : 'Create New Category'}
-            </h4>
-            <form onSubmit={onSubmit} className="space-y-3">
-              <div>
-                <label className="form-label">Category Name *</label>
-                <Input
-                  value={categoryName}
-                  onChange={(e) => onCategoryNameChange(e.target.value)}
-                  placeholder="e.g., Instruments, Materials, Consumables"
-                  required
-                />
-              </div>
-              <div>
-                <label className="form-label">Description</label>
-                <Textarea
-                  value={categoryDescription}
-                  onChange={(e) => onCategoryDescriptionChange(e.target.value)}
-                  placeholder="Optional description"
-                  rows={2}
-                />
-              </div>
-            </form>
-          </div>
         </div>
 
         <DialogFooter>
