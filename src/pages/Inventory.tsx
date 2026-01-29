@@ -905,17 +905,11 @@ export default function Inventory() {
   }, [searchQuery, categoryFilter, statusFilter]);
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const q = params.get('q');
+    const q = new URLSearchParams(location.search).get('q');
     if (q && q !== searchQuery) setSearchQuery(q);
   }, [location.search, searchQuery]);
 
   const handleCategoryFilterChange = (value: string) => {
-    if (value === '__manage_categories__') {
-      setIsCategoryDialogOpen(true);
-      return;
-    }
-
     setCategoryFilter(value);
   };
 
@@ -1295,16 +1289,6 @@ export default function Inventory() {
                 {categories.map(cat => (
                   <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                 ))}
-                <div className="my-1 h-px bg-border" role="separator" />
-                <SelectItem
-                  value="__manage_categories__"
-                  className="text-primary focus:text-primary"
-                >
-                  <span className="flex items-center gap-2">
-                    <Settings className="h-4 w-4" />
-                    <span className="font-medium">Manage Categories</span>
-                  </span>
-                </SelectItem>
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -1557,7 +1541,16 @@ export default function Inventory() {
               </div>
               <div>
                 <label className="form-label">Category *</label>
-                <Select value={formData.category_id} onValueChange={(v) => setFormData({...formData, category_id: v})}>
+                <Select
+                  value={formData.category_id}
+                  onValueChange={(v) => {
+                    if (v === '__manage_categories__') {
+                      setIsCategoryDialogOpen(true);
+                      return;
+                    }
+                    setFormData({ ...formData, category_id: v });
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder={categories.length === 0 ? "No categories available" : "Select category"} />
                   </SelectTrigger>
@@ -1582,6 +1575,14 @@ export default function Inventory() {
                         <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                       ))
                     )}
+
+                    {categories.length > 0 && <div className="my-1 h-px bg-border" role="separator" />}
+                    <SelectItem value="__manage_categories__" className="text-primary focus:text-primary">
+                      <span className="flex items-center gap-2">
+                        <Settings className="h-4 w-4" />
+                        <span className="font-medium">Manage Categories</span>
+                      </span>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
