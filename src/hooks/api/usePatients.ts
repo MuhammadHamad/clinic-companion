@@ -21,6 +21,7 @@ export function usePatients(options?: { autoFetch?: boolean }) {
   const [pagedPatients, setPagedPatients] = useState<Patient[]>([]);
   const [pagedTotalCount, setPagedTotalCount] = useState<number>(0);
   const [isPageLoading, setIsPageLoading] = useState(false);
+  const fetchPatientsPageRequestIdRef = useRef(0);
   const { toast } = useToast();
   const { activeClinicId } = useTenant();
 
@@ -90,6 +91,7 @@ export function usePatients(options?: { autoFetch?: boolean }) {
 
   const fetchPatientsPage = useCallback(
     async ({ page, pageSize, searchQuery, statusFilter }: PatientsPageParams) => {
+      const requestId = ++fetchPatientsPageRequestIdRef.current;
       try {
         setIsPageLoading(true);
 
@@ -117,38 +119,54 @@ export function usePatients(options?: { autoFetch?: boolean }) {
           query = query.eq('status', status);
         }
 
-        const qRaw = (searchQuery || '').trim();
+        const qRaw = (searchQuery || '');
         const q = qRaw.toLowerCase();
         const qDigits = q.replace(/\D/g, '');
 
-        if (q.length > 0) {
-          const like = `%${q}%`;
-          const parts = [
-            `first_name.ilike.${like}`,
-            `last_name.ilike.${like}`,
-            `patient_number.ilike.${like}`,
-            `phone.ilike.${like}`,
-          ];
+        if (q.trim().length > 0) {
+          const normalized = q.trim().replace(/\s+/g, ' ');
+          const tokens = normalized.split(' ').filter(Boolean);
+
+          const parts: string[] = [];
+
+          if (tokens.length >= 2) {
+            const first = tokens[0];
+            const last = tokens.slice(1).join(' ');
+            parts.push(`and(first_name.ilike.%${first}%,last_name.ilike.%${last}%)`);
+            parts.push(`and(first_name.ilike.%${last}%,last_name.ilike.%${first}%)`);
+          }
+
+          parts.push(`first_name.ilike.%${normalized}%`);
+          parts.push(`last_name.ilike.%${normalized}%`);
+          parts.push(`patient_number.ilike.%${normalized}%`);
+          parts.push(`phone.ilike.%${normalized}%`);
+
           if (qDigits.length > 0 && qDigits !== q) {
             parts.push(`phone.ilike.%${qDigits}%`);
           }
+
           query = query.or(parts.join(','));
         }
 
         const { data, error, count } = await query.range(from, to);
 
         if (error) throw error;
+        if (requestId !== fetchPatientsPageRequestIdRef.current) return;
         setPagedPatients((data || []).map(mapRowToPatient));
         setPagedTotalCount(count || 0);
       } catch (error: any) {
-        logger.error('Error fetching patients page:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to fetch patients',
-          variant: 'destructive',
-        });
+        if (requestId === fetchPatientsPageRequestIdRef.current) {
+          logger.error('Error fetching patients page:', error);
+          toast({
+            title: 'Error',
+            description: 'Failed to fetch patients',
+            variant: 'destructive',
+          });
+        }
       } finally {
-        setIsPageLoading(false);
+        if (requestId === fetchPatientsPageRequestIdRef.current) {
+          setIsPageLoading(false);
+        }
       }
     },
     [activeClinicId, toast],

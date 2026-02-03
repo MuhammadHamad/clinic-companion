@@ -184,6 +184,7 @@ export default function Patients() {
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -211,6 +212,7 @@ export default function Patients() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 20;
+  const [hasLoadedPageOnce, setHasLoadedPageOnce] = useState(false);
 
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
@@ -487,11 +489,36 @@ export default function Patients() {
     setInvoiceSummariesByPatientId(res.data);
   }, [currentPagePatients, fetchInvoiceSummariesByPatientIds]);
 
+  const normalizeSearchQuery = useCallback((value: string) => {
+    return value.replace(/\s+/g, ' ').trim();
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const q = params.get('q');
-    if (q && q !== searchQuery) setSearchQuery(q);
-  }, [location.search, searchQuery]);
+    const q = params.get('q') ?? '';
+    setSearchInput((prev) => {
+      if (prev !== q) {
+        setCurrentPage(1);
+      }
+      return prev === q ? prev : q;
+    });
+    setSearchQuery((prev) => (prev === q ? prev : q));
+  }, [location.search]);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      const next = normalizeSearchQuery(searchInput);
+      setSearchQuery((prev) => {
+        if (prev === next) return prev;
+        setCurrentPage(1);
+        return next;
+      });
+    }, 300);
+
+    return () => {
+      window.clearTimeout(handle);
+    };
+  }, [normalizeSearchQuery, searchInput]);
 
   useEffect(() => {
     fetchPatientsPage({
@@ -501,6 +528,12 @@ export default function Patients() {
       statusFilter,
     });
   }, [fetchPatientsPage, currentPage, pageSize, searchQuery, statusFilter]);
+
+  useEffect(() => {
+    if (!isPageLoading) {
+      setHasLoadedPageOnce(true);
+    }
+  }, [isPageLoading]);
 
   useEffect(() => {
     refreshPatientsStats();
@@ -538,11 +571,6 @@ export default function Patients() {
     totalPatients === 0
       ? 0
       : Math.min(startIndex + currentPagePatients.length, totalPatients);
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, statusFilter]);
 
   const calculateAge = (dateOfBirth?: string) => {
     if (!dateOfBirth) return '-';
@@ -1200,7 +1228,7 @@ export default function Patients() {
     }
   };
 
-  if (isPageLoading && currentPagePatients.length === 0) {
+  if (!hasLoadedPageOnce && isPageLoading && currentPagePatients.length === 0) {
     return (
       <div className="min-h-screen">
         <Header title="Customers" subtitle="Manage your customer records" />
@@ -1239,12 +1267,18 @@ export default function Patients() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by name, phone, or customer #..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="pl-9"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select
+              value={statusFilter}
+              onValueChange={(v) => {
+                setStatusFilter(v);
+                setCurrentPage(1);
+              }}
+            >
               <SelectTrigger className="patients-status-trigger w-full sm:w-36">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Status" />
