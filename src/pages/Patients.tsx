@@ -248,7 +248,8 @@ export default function Patients() {
         supabase
           .from('patients')
           .select('id', { count: 'exact', head: true })
-          .neq('status', 'archived'),
+          .neq('status', 'archived')
+          .neq('status', 'lead'),
         supabase
           .from('patients')
           .select('id', { count: 'exact', head: true })
@@ -258,7 +259,8 @@ export default function Patients() {
           .select('id', { count: 'exact', head: true })
           .gte('created_at', startIso)
           .lt('created_at', nextIso)
-          .neq('status', 'archived'),
+          .neq('status', 'archived')
+          .neq('status', 'lead'),
       ]);
 
       setPatientsStats({

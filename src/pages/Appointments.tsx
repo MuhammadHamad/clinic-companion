@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import {
   Dialog,
   DialogContent,
@@ -27,6 +29,7 @@ import {
   Clock,
   Calendar as CalendarIcon,
   Check,
+  ChevronsUpDown,
   X,
   AlertCircle,
   Loader2,
@@ -81,12 +84,16 @@ const appointmentTypeOptions: Array<{ value: AppointmentType; label: string }> =
 
 export default function Appointments() {
   const { appointments, isLoading, isRefreshing, createAppointment, updateAppointmentStatus } = useAppointments();
-  const { patients } = usePatients();
+  const { patients, createPatient } = usePatients();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isTempPatientMode, setIsTempPatientMode] = useState(false);
+  const [tempPatientForm, setTempPatientForm] = useState({ first_name: '', last_name: '', phone: '' });
+  const [isTempPatientSubmitting, setIsTempPatientSubmitting] = useState(false);
+  const [isCustomerPickerOpen, setIsCustomerPickerOpen] = useState(false);
   const [showAllSlots, setShowAllSlots] = useState(false);
   const { toast } = useToast();
 
@@ -332,6 +339,65 @@ export default function Appointments() {
     setIsSubmitting(false);
   };
 
+  const handleCreateTempPatient = async () => {
+    const first_name = tempPatientForm.first_name.trim();
+    const last_name = tempPatientForm.last_name.trim();
+    const phone = tempPatientForm.phone.trim();
+
+    if (!first_name || !last_name || !phone) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please enter first name, last name, and phone number.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsTempPatientSubmitting(true);
+    try {
+      const created = await createPatient({
+        first_name,
+        last_name,
+        phone,
+        email: '',
+        date_of_birth: undefined,
+        gender: undefined,
+        address: '',
+        city: '',
+        emergency_contact_name: '',
+        emergency_contact_phone: '',
+        allergies: '',
+        current_medications: '',
+        medical_conditions: '',
+        notes: '',
+        status: 'lead',
+        created_by: undefined,
+        balance: 0,
+        last_visit_date: undefined,
+        archived_at: undefined,
+      });
+
+      if (!created.success || !created.data) {
+        throw new Error(created.error || 'Failed to create customer');
+      }
+
+      const patientId = created.data.id;
+      if (!patientId) {
+        throw new Error('Failed to create customer');
+      }
+
+      setFormData((prev) => ({ ...prev, patient_id: patientId }));
+      setIsTempPatientMode(false);
+      setTempPatientForm({ first_name: '', last_name: '', phone: '' });
+      toast({ title: 'Temporary customer added', description: 'You can now schedule the appointment.' });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to create customer';
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
+    } finally {
+      setIsTempPatientSubmitting(false);
+    }
+  };
+
   const handleStatusUpdate = async (id: string, status: AppointmentStatus) => {
     const result = await updateAppointmentStatus(id, status);
     setIsDetailOpen(false);
@@ -351,13 +417,13 @@ export default function Appointments() {
     if (!phone) {
       toast({
         title: 'Missing Phone',
-        description: 'This patient does not have a valid phone number for WhatsApp.',
+        description: 'This customer does not have a valid phone number for WhatsApp.',
         variant: 'destructive',
       });
       return;
     }
 
-    const patientName = `${appointment.patient?.first_name || ''} ${appointment.patient?.last_name || ''}`.trim() || 'Patient';
+    const patientName = `${appointment.patient?.first_name || ''} ${appointment.patient?.last_name || ''}`.trim() || 'Customer';
     const msg =
       `Hi ${patientName},\n\n` +
       `Your appointment is confirmed.\n` +
@@ -539,28 +605,157 @@ export default function Appointments() {
       </div>
 
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Schedule Appointment</DialogTitle>
-            <DialogDescription>Book a new appointment for a patient</DialogDescription>
+            <DialogDescription>Book a new appointment for a customer</DialogDescription>
           </DialogHeader>
           
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="form-label">Patient *</label>
-              <Select value={formData.patient_id} onValueChange={(v) => setFormData({...formData, patient_id: v})}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a patient" />
-                </SelectTrigger>
-                <SelectContent>
-                  {patients.filter(p => p.status === 'active').map(patient => (
-                    <SelectItem key={patient.id} value={patient.id}>
-                      {patient.first_name} {patient.last_name} ({patient.patient_number})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <label className="form-label">Customer *</label>
+              <Popover open={isCustomerPickerOpen} onOpenChange={setIsCustomerPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={isCustomerPickerOpen}
+                    className="w-full justify-between"
+                  >
+                    {(() => {
+                      const selected = patients.find((p) => p.id === formData.patient_id);
+                      if (!selected) return <span className="text-muted-foreground">Select a customer</span>;
+                      return (
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="truncate">
+                            {selected.first_name} {selected.last_name} ({selected.patient_number})
+                          </span>
+                          {selected.status === 'lead' && (
+                            <Badge variant="secondary" className="shrink-0 border border-primary/20 bg-primary/10 text-primary">
+                              Temp
+                            </Badge>
+                          )}
+                        </span>
+                      );
+                    })()}
+                    <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+
+                <PopoverContent align="start" className="w-[--radix-popover-trigger-width] p-0">
+                  <Command>
+                    <CommandInput placeholder="Search customers..." />
+                    <CommandList
+                      className="max-h-[320px] overflow-y-auto overscroll-contain"
+                      onWheel={(e) => {
+                        e.stopPropagation();
+                        const el = e.currentTarget as HTMLDivElement;
+                        el.scrollTop += e.deltaY;
+                      }}
+                    >
+                      <CommandEmpty>No customers found.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="__create_temp_customer__"
+                          className="font-bold text-primary bg-primary/15 border border-primary/20 data-[selected=true]:bg-primary/25 data-[selected=true]:text-primary"
+                          onSelect={() => {
+                            setIsTempPatientMode(true);
+                            setIsCustomerPickerOpen(false);
+                          }}
+                        >
+                          + Add temporary customer
+                        </CommandItem>
+                      </CommandGroup>
+                      <CommandGroup>
+                        {patients
+                          .filter((p) => p.status === 'active' || p.status === 'lead')
+                          .map((p) => {
+                            const label = `${p.first_name} ${p.last_name} (${p.patient_number})`;
+                            const searchValue = `${p.first_name} ${p.last_name} ${p.patient_number} ${p.phone || ''}`;
+                            const isSelected = formData.patient_id === p.id;
+                            const isTemp = p.status === 'lead';
+                            return (
+                              <CommandItem
+                                key={p.id}
+                                value={searchValue}
+                                onSelect={() => {
+                                  setIsTempPatientMode(false);
+                                  setFormData((prev) => ({ ...prev, patient_id: p.id }));
+                                  setIsCustomerPickerOpen(false);
+                                }}
+                                className={cn(
+                                  isTemp && 'bg-primary/5 border border-primary/10',
+                                )}
+                              >
+                                <Check className={cn('mr-2 h-4 w-4', isSelected ? 'opacity-100' : 'opacity-0')} />
+                                <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                                  <span className={cn('truncate', isTemp && 'text-primary')}>
+                                    {label}
+                                  </span>
+                                  {isTemp && (
+                                    <Badge variant="secondary" className="shrink-0 border border-primary/20 bg-primary/10 text-primary">
+                                      Temp
+                                    </Badge>
+                                  )}
+                                </div>
+                              </CommandItem>
+                            );
+                          })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
+
+            {isTempPatientMode && (
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="form-label">First Name *</label>
+                    <Input
+                      value={tempPatientForm.first_name}
+                      onChange={(e) => setTempPatientForm((prev) => ({ ...prev, first_name: e.target.value }))}
+                      placeholder="First name"
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label">Last Name *</label>
+                    <Input
+                      value={tempPatientForm.last_name}
+                      onChange={(e) => setTempPatientForm((prev) => ({ ...prev, last_name: e.target.value }))}
+                      placeholder="Last name"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="form-label">Phone *</label>
+                  <Input
+                    value={tempPatientForm.phone}
+                    onChange={(e) => setTempPatientForm((prev) => ({ ...prev, phone: e.target.value }))}
+                    placeholder="Phone number"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setIsTempPatientMode(false);
+                      setTempPatientForm({ first_name: '', last_name: '', phone: '' });
+                    }}
+                    disabled={isTempPatientSubmitting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="button" onClick={handleCreateTempPatient} disabled={isTempPatientSubmitting}>
+                    {isTempPatientSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Add Temporary Customer
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div>

@@ -73,7 +73,7 @@ export function useAppointments() {
           last_name: a.patient.last_name,
           phone: a.patient.phone,
           email: a.patient.email,
-          status: a.patient.status as 'active' | 'inactive',
+          status: a.patient.status as Patient['status'],
           registration_date: a.patient.registration_date,
           created_at: a.patient.created_at,
         } as Patient : undefined,
@@ -225,10 +225,14 @@ export function useAppointments() {
   const updateAppointmentStatus = async (id: string, status: AppointmentStatus) => {
     try {
       let prevStatus: AppointmentStatus | null = null;
+      let patientId: string | null = null;
+      let patientStatus: Patient['status'] | null = null;
       setAppointments((prev) =>
         prev.map((a) => {
           if (a.id !== id) return a;
           prevStatus = a.status;
+          patientId = a.patient_id;
+          patientStatus = (a.patient?.status as Patient['status'] | undefined) ?? null;
           return { ...a, status };
         }),
       );
@@ -243,6 +247,40 @@ export function useAppointments() {
           setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status: prevStatus as AppointmentStatus } : a)));
         }
         throw error;
+      }
+
+      // If this appointment completion converts a temporary customer (lead), promote them to active.
+      if (status === 'completed' && patientId) {
+        try {
+          let effectiveStatus = patientStatus;
+          if (!effectiveStatus) {
+            const { data: patientRow, error: patientErr } = await supabase
+              .from('patients')
+              .select('status')
+              .eq('id', patientId)
+              .single();
+            if (patientErr) throw patientErr;
+            effectiveStatus = (patientRow?.status as Patient['status'] | undefined) ?? null;
+          }
+
+          if (effectiveStatus === 'lead') {
+            const { error: promoteErr } = await supabase
+              .from('patients')
+              .update({ status: 'active' })
+              .eq('id', patientId);
+            if (promoteErr) throw promoteErr;
+
+            setAppointments((prev) =>
+              prev.map((a) =>
+                a.patient_id === patientId && a.patient
+                  ? { ...a, patient: { ...a.patient, status: 'active' } }
+                  : a,
+              ),
+            );
+          }
+        } catch (e: any) {
+          logger.error('Failed to promote lead customer after appointment completion:', e);
+        }
       }
 
       await fetchAppointments();

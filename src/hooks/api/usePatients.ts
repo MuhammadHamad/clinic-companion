@@ -43,7 +43,7 @@ export function usePatients(options?: { autoFetch?: boolean }) {
     registration_date: p.registration_date,
     last_visit_date: p.last_visit_date,
     notes: p.notes,
-    status: p.status as 'active' | 'inactive',
+    status: p.status as Patient['status'],
     balance: p.balance ? Number(p.balance) : 0,
     created_at: p.created_at,
     created_by: p.created_by,
@@ -112,7 +112,7 @@ export function usePatients(options?: { autoFetch?: boolean }) {
 
         const status = (statusFilter || 'all').trim();
         if (status === 'all') {
-          query = query.neq('status', 'archived');
+          query = query.neq('status', 'archived').neq('status', 'lead');
         } else {
           query = query.eq('status', status);
         }
@@ -157,10 +157,15 @@ export function usePatients(options?: { autoFetch?: boolean }) {
   const createPatient = async (patientData: Omit<Patient, 'id' | 'patient_number' | 'created_at' | 'registration_date'>) => {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
+
+      if (!activeClinicId) {
+        return { success: false, error: 'No active clinic selected' };
+      }
       
       const { data, error } = await supabase
         .from('patients')
         .insert({
+          clinic_id: activeClinicId,
           first_name: patientData.first_name,
           last_name: patientData.last_name,
           phone: patientData.phone,
@@ -183,8 +188,9 @@ export function usePatients(options?: { autoFetch?: boolean }) {
         .single();
 
       if (error) throw error;
-      setPatients((prev) => [mapRowToPatient(data), ...prev]);
-      return { success: true, data };
+      const mapped = mapRowToPatient(data);
+      setPatients((prev) => [mapped, ...prev]);
+      return { success: true, data: mapped };
     } catch (error: any) {
       logger.error('Error creating patient:', error);
       return { success: false, error: error.message };

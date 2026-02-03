@@ -30,7 +30,7 @@ export interface Patient {
   registration_date: string;
   last_visit_date?: string;
   notes?: string;
-  status: 'active' | 'inactive' | 'archived';
+  status: 'active' | 'inactive' | 'lead' | 'archived';
   created_at: string;
   created_by?: string;
   balance?: number;

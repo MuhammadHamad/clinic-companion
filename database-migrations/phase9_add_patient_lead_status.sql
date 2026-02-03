@@ -1,0 +1,12 @@
+DO $$
+BEGIN
+  BEGIN
+    ALTER TYPE patient_status_enum ADD VALUE IF NOT EXISTS 'lead';
+  EXCEPTION WHEN OTHERS THEN
+    BEGIN
+      ALTER TYPE patient_status ADD VALUE IF NOT EXISTS 'lead';
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+  END;
+END $$;

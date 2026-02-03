@@ -82,6 +82,7 @@ import { InventoryItem, InventoryCategory, InventoryStatus, MovementType, StockM
 import { useToast } from '@/hooks';
 import { cn } from '@/lib/utils';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useTenant } from '@/contexts/TenantContext';
 import { format } from 'date-fns';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
@@ -97,7 +98,18 @@ const statusLabels: Record<InventoryStatus, string> = {
   out_of_stock: 'Out of Stock',
 };
 
+const UNIT_EXAMPLES: Array<{ value: string; label: string }> = [
+  { value: 'pieces', label: 'Pieces' },
+  { value: 'box', label: 'Box' },
+  { value: 'pack', label: 'Pack' },
+  { value: 'syringe', label: 'Syringe' },
+  { value: 'kit', label: 'Kit' },
+  { value: 'strip', label: 'Strip' },
+  { value: 'bottle', label: 'Bottle' },
+];
+
 export default function Inventory() {
+  const { activeClinicId } = useTenant();
   const {
     items,
     categories,
@@ -236,6 +248,10 @@ export default function Inventory() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryDescription, setNewCategoryDescription] = useState('');
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+
+  const [isUnitsDialogOpen, setIsUnitsDialogOpen] = useState(false);
+  const [customUnits, setCustomUnits] = useState<string[]>([]);
+  const [newUnitName, setNewUnitName] = useState('');
   
   // Category edit/delete state
   const [editingCategory, setEditingCategory] = useState<InventoryCategory | null>(null);
@@ -269,6 +285,81 @@ export default function Inventory() {
     out_of_stock: items.filter(i => i.status === 'out_of_stock').length,
     total_value: items.reduce((sum, i) => sum + (i.current_quantity * (i.unit_cost || 0)), 0),
   };
+
+  const unitsStorageKey = useMemo(() => {
+    const scope = activeClinicId || 'default';
+    return `inventory_units_v1:${scope}`;
+  }, [activeClinicId]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(unitsStorageKey);
+      if (!raw) {
+        setCustomUnits([]);
+        return;
+      }
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) {
+        setCustomUnits([]);
+        return;
+      }
+      const next = parsed
+        .map((v) => String(v ?? '').trim())
+        .filter(Boolean);
+      setCustomUnits(next);
+    } catch {
+      setCustomUnits([]);
+    }
+  }, [unitsStorageKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(unitsStorageKey, JSON.stringify(customUnits));
+    } catch {
+      // ignore
+    }
+  }, [customUnits, unitsStorageKey]);
+
+  const unitOptions = useMemo(() => {
+    const toLabel = (v: string) => {
+      const s = String(v || '').trim();
+      if (!s) return '';
+      return s.charAt(0).toUpperCase() + s.slice(1);
+    };
+
+    const seen = new Set<string>();
+    const options: Array<{ value: string; label: string }> = [];
+
+    for (const u of customUnits) {
+      const v = String(u || '').trim();
+      if (!v) continue;
+      const k = v.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      options.push({ value: v, label: toLabel(v) });
+    }
+
+    for (const u of items.map((it) => String(it.unit_of_measure || '').trim()).filter(Boolean)) {
+      const k = u.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      options.push({ value: u, label: toLabel(u) });
+    }
+
+    return options;
+  }, [customUnits, items]);
+
+  const unitExists = useCallback(
+    (unit: string) => {
+      const v = String(unit || '').trim();
+      if (!v) return false;
+      const k = v.toLowerCase();
+      if (customUnits.some((u) => String(u || '').trim().toLowerCase() === k)) return true;
+      if (items.some((it) => String(it.unit_of_measure || '').trim().toLowerCase() === k)) return true;
+      return false;
+    },
+    [customUnits, items],
+  );
 
   // Use server-side paginated items for display
   const currentPageItems = pagedItems;
@@ -978,17 +1069,22 @@ export default function Inventory() {
     return 'in_stock';
   };
 
-  const submitInventoryForm = async () => {
+  const submitInventoryForm = async (data = formData) => {
+    const nextData = {
+      ...data,
+      unit_of_measure: String(data.unit_of_measure || 'units').trim() || 'units',
+    };
+
     const result = formMode === 'create'
-      ? await createItem(formData)
-      : await updateItem(selectedItem!.id, formData);
+      ? await createItem(nextData)
+      : await updateItem(selectedItem!.id, nextData);
 
     if (result.success) {
       setIsFormOpen(false);
       toast({
         title: formMode === 'create' ? 'Item Added' : 'Item Updated',
         description: formMode === 'create'
-          ? `${formData.item_name} has been added to inventory`
+          ? `${nextData.item_name} has been added to inventory`
           : 'Inventory item has been updated successfully',
       });
       // Refresh page data after mutation
@@ -1013,7 +1109,7 @@ export default function Inventory() {
       return;
     }
     
-    if (!formData.item_name || !formData.unit_of_measure || !formData.category_id) {
+    if (!formData.item_name || !formData.category_id) {
       toast({
         title: 'Validation Error',
         description: 'Please fill in all required fields',
@@ -1023,13 +1119,16 @@ export default function Inventory() {
       return;
     }
 
+    const effectiveUnit = String(formData.unit_of_measure || 'units').trim() || 'units';
+    const submitData = { ...formData, unit_of_measure: effectiveUnit };
+
     if (formMode === 'create') {
-      const key = `${formData.item_name.trim().toLowerCase()}|${formData.category_id}|${formData.unit_of_measure}`;
+      const key = `${formData.item_name.trim().toLowerCase()}|${formData.category_id}|${effectiveUnit}`;
       const existing = items.find(
         (i) =>
           i.item_name.trim().toLowerCase() === formData.item_name.trim().toLowerCase() &&
           i.category_id === formData.category_id &&
-          i.unit_of_measure === formData.unit_of_measure
+          String(i.unit_of_measure || '').trim().toLowerCase() === effectiveUnit.toLowerCase()
       );
 
       if (existing && duplicateItemWarningKey !== key) {
@@ -1044,7 +1143,7 @@ export default function Inventory() {
 
     setIsSubmitting(true);
     try {
-      await submitInventoryForm();
+      await submitInventoryForm(submitData);
     } finally {
       setIsSubmitting(false);
       submitLockRef.current = false;
@@ -1431,7 +1530,7 @@ export default function Inventory() {
                     </TableCell>
                     <TableCell>
                       <div className="font-medium">{item.item_name}</div>
-                      <div className="text-sm text-muted-foreground">{item.unit_of_measure}</div>
+                      <div className="text-sm text-muted-foreground">{item.unit_of_measure || 'units'}</div>
                     </TableCell>
                     <TableCell>{item.category?.name || '-'}</TableCell>
                     <TableCell className="text-center">
@@ -1587,19 +1686,34 @@ export default function Inventory() {
                 </Select>
               </div>
               <div>
-                <label className="form-label">Unit of Measure *</label>
-                <Select value={formData.unit_of_measure} onValueChange={(v) => setFormData({...formData, unit_of_measure: v})}>
+                <label className="form-label">Unit of Measure</label>
+                <Select
+                  value={formData.unit_of_measure}
+                  onValueChange={(v) => {
+                    if (v === '__manage_units__') {
+                      setIsUnitsDialogOpen(true);
+                      return;
+                    }
+                    setFormData({ ...formData, unit_of_measure: v });
+                  }}
+                >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select unit" />
+                    <SelectValue placeholder="Select unit (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="pieces">Pieces</SelectItem>
-                    <SelectItem value="box">Box</SelectItem>
-                    <SelectItem value="pack">Pack</SelectItem>
-                    <SelectItem value="syringe">Syringe</SelectItem>
-                    <SelectItem value="kit">Kit</SelectItem>
-                    <SelectItem value="strip">Strip</SelectItem>
-                    <SelectItem value="bottle">Bottle</SelectItem>
+                    {unitOptions.map((u) => (
+                      <SelectItem key={u.value} value={u.value}>
+                        {u.label}
+                      </SelectItem>
+                    ))}
+
+                    {unitOptions.length > 0 && <div className="my-1 h-px bg-border" role="separator" />}
+                    <SelectItem value="__manage_units__" className="text-primary focus:text-primary">
+                      <span className="flex items-center gap-2">
+                        <Settings className="h-4 w-4" />
+                        <span className="font-medium">Manage Units</span>
+                      </span>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1813,6 +1927,109 @@ export default function Inventory() {
         }}
         isSubmitting={isCreatingCategory}
       />
+
+      <Dialog open={isUnitsDialogOpen} onOpenChange={setIsUnitsDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Units</DialogTitle>
+            <DialogDescription>Add or remove units for your clinic.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Examples</div>
+              <div className="flex flex-wrap gap-2">
+                {UNIT_EXAMPLES.map((ex) => (
+                  <Button
+                    key={ex.value}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const v = String(ex.value || '').trim();
+                      if (!v) return;
+                      if (v.length > 20) return;
+                      if (unitExists(v)) return;
+                      setCustomUnits((prev) => [...prev, v]);
+                    }}
+                  >
+                    {ex.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Input
+                value={newUnitName}
+                onChange={(e) => setNewUnitName(e.target.value)}
+                placeholder="e.g., ml"
+              />
+              <Button
+                type="button"
+                onClick={() => {
+                  const v = String(newUnitName || '').trim();
+                  if (!v) return;
+                  if (v.length > 20) {
+                    toast({
+                      title: 'Invalid unit',
+                      description: 'Unit must be 20 characters or less.',
+                      variant: 'destructive',
+                    });
+                    return;
+                  }
+
+                  if (unitExists(v)) {
+                    toast({
+                      title: 'Already exists',
+                      description: 'This unit is already available.',
+                      variant: 'destructive',
+                    });
+                    return;
+                  }
+
+                  setCustomUnits((prev) => [...prev, v]);
+                  setNewUnitName('');
+                }}
+              >
+                Add
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              {customUnits.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No custom units added.</div>
+              ) : (
+                customUnits.map((u) => (
+                  <div key={u} className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
+                    <div className="text-sm font-medium">{u}</div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => {
+                        setCustomUnits((prev) => prev.filter((x) => x !== u));
+                        if (String(formData.unit_of_measure || '').trim().toLowerCase() === String(u).trim().toLowerCase()) {
+                          setFormData({ ...formData, unit_of_measure: '' });
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsUnitsDialogOpen(false)}>
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <DeleteCategoryDialog
         open={isDeleteCategoryOpen}

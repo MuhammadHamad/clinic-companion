@@ -443,7 +443,7 @@ export default function Invoices() {
             <div className="invoices-search relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by invoice # or patient..."
+                placeholder="Search by invoice # or customer..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -501,7 +501,7 @@ export default function Invoices() {
               <TableHeader>
                 <TableRow className="bg-muted/50">
                   <TableHead className="font-semibold whitespace-nowrap">Invoice #</TableHead>
-                  <TableHead className="font-semibold whitespace-nowrap">Patient</TableHead>
+                  <TableHead className="font-semibold whitespace-nowrap">Customer</TableHead>
                   <TableHead className="font-semibold whitespace-nowrap">Date</TableHead>
                   <TableHead className="font-semibold text-right whitespace-nowrap">Total</TableHead>
                   <TableHead className="font-semibold text-right whitespace-nowrap">Paid</TableHead>
@@ -639,15 +639,15 @@ export default function Invoices() {
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create Invoice</DialogTitle>
-            <DialogDescription>Create a new invoice for a patient</DialogDescription>
+            <DialogDescription>Create a new invoice for a customer</DialogDescription>
           </DialogHeader>
           
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="form-label">Patient *</label>
+              <label className="form-label">Customer *</label>
               <Select value={formData.patient_id} onValueChange={(v) => setFormData({...formData, patient_id: v})}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a patient" />
+                  <SelectValue placeholder="Select a customer" />
                 </SelectTrigger>
                 <SelectContent>
                   {patients.filter(p => p.status === 'active').map(patient => (
