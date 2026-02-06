@@ -9,11 +9,7 @@ alter table public.recurring_expenses
     payment_method in (
       'cash',
       'bank_transfer',
-      'card',
-      'credit_card',
-      'debit_card',
-      'mobile_wallet',
-      'cheque'
+      'card'
     )
     or payment_method is null
   );
