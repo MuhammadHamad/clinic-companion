@@ -77,7 +77,14 @@ export interface TreatmentType {
 
 // Invoice types
 export type InvoiceStatus = 'draft' | 'unpaid' | 'partial' | 'paid' | 'overdue';
-export type PaymentMethod = 'cash' | 'card' | 'bank_transfer' | 'cheque';
+export type PaymentMethod =
+  | 'cash'
+  | 'card'
+  | 'bank_transfer'
+  | 'credit_card'
+  | 'debit_card'
+  | 'mobile_wallet'
+  | 'cheque';
 
 export interface InvoiceItem {
   id: string;
@@ -245,4 +252,48 @@ export interface OutstandingReport {
     amount: number;
     days_overdue: number;
   }[];
+}
+
+// Expenses types
+export type ExpenseType = 'ad_hoc' | 'recurring';
+
+export interface ExpenseCategory {
+  id: string;
+  clinic_id: string;
+  name: string;
+  is_system: boolean;
+  created_at: string;
+}
+
+export interface Expense {
+  id: string;
+  clinic_id: string;
+  expense_date: string;
+  amount: number;
+  expense_type: ExpenseType;
+  is_recurring?: boolean;
+  recurring_expense_id?: string | null;
+  category_id?: string | null;
+  vendor_name?: string | null;
+  payment_method?: PaymentMethod | null;
+  description: string;
+  notes?: string | null;
+  created_at: string;
+  category?: ExpenseCategory;
+}
+
+export interface RecurringExpense {
+  id: string;
+  clinic_id: string;
+  next_due_date: string;
+  amount: number;
+  category_id?: string | null;
+  vendor_name?: string | null;
+  payment_method?: PaymentMethod | null;
+  description: string;
+  notes?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  category?: ExpenseCategory;
 }

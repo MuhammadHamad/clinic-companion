@@ -5,6 +5,7 @@ import {
   Users,
   CalendarDays,
   Package,
+  Receipt,
   BarChart3,
   Settings,
   LogOut,
@@ -36,6 +37,7 @@ const navigation: NavItem[] = [
   { name: 'Appointments', href: '/appointments', icon: CalendarDays },
   ...(usersUiEnabled ? [{ name: 'Users', href: '/users', icon: Users, allowedRoles: ['admin'] } as NavItem] : []),
   { name: 'Inventory', href: '/inventory', icon: Package, allowedRoles: ['admin'] },
+  { name: 'Utilities', href: '/utilities', icon: Receipt, allowedRoles: ['admin'] },
   { name: 'Reports', href: '/reports', icon: BarChart3, allowedRoles: ['admin', 'dentist'] },
 ];
 

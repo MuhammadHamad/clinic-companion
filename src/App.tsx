@@ -19,6 +19,7 @@ const Patients = lazy(() => import("./pages/Patients"));
 const Appointments = lazy(() => import("./pages/Appointments"));
 const Invoices = lazy(() => import("./pages/Invoices"));
 const Inventory = lazy(() => import("./pages/Inventory"));
+const Utilities = lazy(() => import("./pages/Utilities"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Users = lazy(() => import("./pages/Users"));
@@ -84,6 +85,7 @@ const App = () => (
                   <Route path="/appointments" element={<Appointments />} />
                   <Route path="/invoices" element={<Invoices />} />
                   <Route path="/inventory" element={<Inventory />} />
+                  <Route path="/utilities" element={<Utilities />} />
                   <Route path="/reports" element={<Reports />} />
                   {usersUiEnabled && <Route path="/users" element={<Users />} />}
                   <Route path="/settings" element={<Settings />} />
