@@ -25,6 +25,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Users = lazy(() => import("./pages/Users"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PendingApproval = lazy(() => import("./pages/PendingApproval"));
+const ClinicDisabled = lazy(() => import("./pages/ClinicDisabled"));
 
 // SaaS pages
 const SaasOverview = lazy(() => import("./pages/saas/SaasOverview"));
@@ -71,6 +72,14 @@ const App = () => (
                 <Route path="/login" element={<Login />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/pending-approval" element={<PendingApproval />} />
+                <Route
+                  path="/clinic-disabled"
+                  element={
+                    <ProtectedRoute>
+                      <ClinicDisabled />
+                    </ProtectedRoute>
+                  }
+                />
                 
                 {/* Protected Routes */}
                 <Route

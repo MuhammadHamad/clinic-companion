@@ -25,8 +25,6 @@ begin
 
     clinic := new.clinic_id;
 
-    -- Production-safe: enforce max users per clinic only when adding a user to a clinic
-    -- (INSERT or moving from another clinic/null into this clinic). Do not block role-only updates.
     if tg_op = 'INSERT' or old.clinic_id is distinct from new.clinic_id then
       select count(*)
       into active_count
@@ -40,7 +38,6 @@ begin
       end if;
     end if;
 
-    -- Enforce only 1 admin per clinic when setting role to admin.
     if new.role = 'admin' and (tg_op = 'INSERT' or old.role is distinct from new.role) then
       select count(*)
       into other_admin_count
@@ -54,7 +51,6 @@ begin
       end if;
     end if;
 
-    -- A clinic must always have at least 1 admin.
     if tg_op = 'UPDATE' and old.role = 'admin' and new.role <> 'admin' and old.clinic_id is not null then
       select count(*)
       into remaining_admin_count

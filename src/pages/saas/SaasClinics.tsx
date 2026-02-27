@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Building2, Users, FileText, DollarSign, ArrowRight, Trash2 } from 'lucide-react';
+import { Building2, Users, FileText, DollarSign, ArrowRight, Trash2, PauseCircle, PlayCircle } from 'lucide-react';
 import { useToast } from '@/hooks';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
@@ -16,6 +16,9 @@ type ClinicRow = {
   name: string;
   slug?: string | null;
   created_at?: string | null;
+  is_paused?: boolean | null;
+  paused_at?: string | null;
+  pause_reason?: string | null;
 };
 
 type ClinicStats = {
@@ -41,6 +44,11 @@ export default function SaasClinics() {
   const [clinicToDelete, setClinicToDelete] = useState<ClinicRow | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [pauseDialogOpen, setPauseDialogOpen] = useState(false);
+  const [clinicToPause, setClinicToPause] = useState<ClinicRow | null>(null);
+  const [pauseReason, setPauseReason] = useState('');
+  const [isPausing, setIsPausing] = useState(false);
+
   const statsCacheRef = useRef<{ key: string; fetchedAt: number }>({ key: '', fetchedAt: 0 });
   const statsTtlMs = 60_000;
 
@@ -48,16 +56,34 @@ export default function SaasClinics() {
     setIsLoading(true);
     setSetupWarning(null);
 
-    const { data, error } = await supabase
+    const withPauseFields = await supabase
       .from('clinics')
-      .select('id, name, slug, created_at')
+      .select('id, name, slug, created_at, is_paused, paused_at, pause_reason')
       .order('created_at', { ascending: false });
+
+    let data: any[] | null = withPauseFields.data as any[] | null;
+    let error = withPauseFields.error as any;
+
+    if (error && String(error.message || '').toLowerCase().includes('column')) {
+      const legacy = await supabase
+        .from('clinics')
+        .select('id, name, slug, created_at')
+        .order('created_at', { ascending: false });
+
+      data = legacy.data as any[] | null;
+      error = legacy.error as any;
+    }
 
     if (error) {
       setClinics([]);
       setSetupWarning('Clinics table is not accessible yet (missing table or RLS policy).');
     } else {
-      const clinicRows = (data || []) as ClinicRow[];
+      const clinicRows = ((data || []) as ClinicRow[]).map((c) => ({
+        ...c,
+        is_paused: c.is_paused ?? false,
+        paused_at: c.paused_at ?? null,
+        pause_reason: c.pause_reason ?? null,
+      }));
       setClinics(clinicRows);
       if (clinicRows.length > 0) {
         fetchClinicStats(clinicRows.map((c) => c.id));
@@ -171,6 +197,54 @@ export default function SaasClinics() {
     e.stopPropagation();
     setClinicToDelete(clinic);
     setDeleteDialogOpen(true);
+  };
+
+  const handlePauseClick = (e: MouseEvent, clinic: ClinicRow) => {
+    e.stopPropagation();
+    setClinicToPause(clinic);
+    setPauseReason(clinic.pause_reason || '');
+    setPauseDialogOpen(true);
+  };
+
+  const toggleClinicPaused = async () => {
+    if (!clinicToPause) return;
+    if (isPausing) return;
+
+    setIsPausing(true);
+
+    const nextPaused = !Boolean(clinicToPause.is_paused);
+    const { error } = await supabase
+      .from('clinics')
+      .update(
+        nextPaused
+          ? { is_paused: true, paused_at: new Date().toISOString(), pause_reason: pauseReason.trim() || null }
+          : { is_paused: false, paused_at: null, pause_reason: null },
+      )
+      .eq('id', clinicToPause.id);
+
+    if (error) {
+      toast({
+        title: 'Failed to update clinic',
+        description: error.message,
+        variant: 'destructive',
+      });
+      setIsPausing(false);
+      return;
+    }
+
+    toast({
+      title: nextPaused ? 'Clinic disabled' : 'Clinic enabled',
+      description: nextPaused
+        ? `${clinicToPause.name} has been temporarily disabled.`
+        : `${clinicToPause.name} has been enabled again.`,
+    });
+
+    setPauseDialogOpen(false);
+    setClinicToPause(null);
+    setPauseReason('');
+    setIsPausing(false);
+    statsCacheRef.current = { key: '', fetchedAt: 0 };
+    fetchClinics();
   };
 
   const deleteClinic = async () => {
@@ -314,6 +388,20 @@ export default function SaasClinics() {
                             Active
                           </Badge>
                         )}
+                        {clinic.is_paused ? (
+                          <Badge variant="secondary" className="bg-warning/10 text-warning border-warning/20">
+                            Paused
+                          </Badge>
+                        ) : null}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
+                          onClick={(e) => handlePauseClick(e, clinic)}
+                          title={clinic.is_paused ? 'Enable clinic' : 'Disable clinic'}
+                        >
+                          {clinic.is_paused ? <PlayCircle className="h-4 w-4" /> : <PauseCircle className="h-4 w-4" />}
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -428,6 +516,57 @@ export default function SaasClinics() {
               </Button>
               <Button variant="destructive" onClick={deleteClinic} disabled={isDeleting}>
                 {isDeleting ? 'Deleting...' : 'Delete Clinic'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={pauseDialogOpen}
+          onOpenChange={(open) => {
+            setPauseDialogOpen(open);
+            if (!open) {
+              setClinicToPause(null);
+              setPauseReason('');
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{clinicToPause?.is_paused ? 'Enable Clinic' : 'Disable Clinic'}</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                {clinicToPause?.is_paused
+                  ? 'Enable this clinic so staff can log in again.'
+                  : 'Disable this clinic temporarily. Staff will be blocked from accessing the app.'}
+              </p>
+              <div className="p-3 rounded-lg bg-muted">
+                <div className="font-medium">{clinicToPause?.name || '—'}</div>
+                <div className="text-sm text-muted-foreground">{clinicToPause?.slug || '—'}</div>
+              </div>
+
+              {!clinicToPause?.is_paused ? (
+                <div>
+                  <label className="form-label">Reason (optional)</label>
+                  <Input value={pauseReason} onChange={(e) => setPauseReason(e.target.value)} />
+                </div>
+              ) : clinicToPause?.pause_reason ? (
+                <div className="text-xs text-muted-foreground">Current reason: {clinicToPause.pause_reason}</div>
+              ) : null}
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setPauseDialogOpen(false)} disabled={isPausing}>
+                Cancel
+              </Button>
+              <Button
+                variant={clinicToPause?.is_paused ? 'default' : 'destructive'}
+                onClick={toggleClinicPaused}
+                disabled={isPausing}
+              >
+                {isPausing ? 'Saving...' : clinicToPause?.is_paused ? 'Enable' : 'Disable'}
               </Button>
             </DialogFooter>
           </DialogContent>

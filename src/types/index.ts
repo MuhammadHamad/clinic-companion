@@ -80,11 +80,7 @@ export type InvoiceStatus = 'draft' | 'unpaid' | 'partial' | 'paid' | 'overdue';
 export type PaymentMethod =
   | 'cash'
   | 'card'
-  | 'bank_transfer'
-  | 'credit_card'
-  | 'debit_card'
-  | 'mobile_wallet'
-  | 'cheque';
+  | 'bank_transfer';
 
 export interface InvoiceItem {
   id: string;

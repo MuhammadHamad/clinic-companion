@@ -107,7 +107,7 @@ export const paymentSchema = z.object({
   amount: z.number()
     .min(0.01, 'Amount must be greater than 0')
     .max(999999, 'Amount must be less than 1,000,000'),
-  payment_method: z.enum(['cash', 'card', 'bank_transfer', 'cheque']),
+  payment_method: z.enum(['cash', 'card', 'bank_transfer']),
   payment_date: z.string()
     .optional()
     .refine((date) => {

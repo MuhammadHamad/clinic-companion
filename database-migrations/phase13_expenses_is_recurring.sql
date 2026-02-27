@@ -13,6 +13,6 @@ alter table public.expenses
 
 alter table public.expenses
   add constraint expenses_payment_method_check
-  check (payment_method in ('cash','bank_transfer','card','credit_card','debit_card','mobile_wallet','cheque') or payment_method is null);
+  check (payment_method in ('cash','bank_transfer','card') or payment_method is null);
 
 comment on column public.expenses.is_recurring is 'Indicates if this is a recurring bill (rent, utilities) vs ad-hoc expense (miscellaneous, daily items)';

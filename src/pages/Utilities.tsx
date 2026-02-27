@@ -262,7 +262,18 @@ export default function Utilities() {
   const totalExpenses = useMemo(() => expenses.reduce((sum, e) => sum + Number(e.amount), 0), [expenses]);
 
   const templateStatusList = useMemo(() => {
-    const activeTemplates = recurringExpenses.filter((t) => t.is_active);
+    const selectedMonthStart = new Date(selectedMonth.year, selectedMonth.month, 1);
+
+    const activeTemplates = recurringExpenses.filter((t) => {
+      if (!t.is_active) return false;
+
+      const createdAt = t.created_at ? new Date(t.created_at) : null;
+      if (!createdAt || Number.isNaN(createdAt.getTime())) return true;
+
+      const templateMonthStart = new Date(createdAt.getFullYear(), createdAt.getMonth(), 1);
+      return selectedMonthStart.getTime() >= templateMonthStart.getTime();
+    });
+
     return activeTemplates
       .map((template) => {
         const instances = expenses
@@ -281,7 +292,7 @@ export default function Utilities() {
         };
       })
       .sort((a, b) => a.template.description.localeCompare(b.template.description));
-  }, [expenses, recurringExpenses]);
+  }, [expenses, recurringExpenses, selectedMonth]);
 
   const paidCount = templateStatusList.filter((c) => c.isPaid).length;
   const unpaidCount = templateStatusList.filter((c) => !c.isPaid).length;
@@ -526,6 +537,32 @@ export default function Utilities() {
               </TabsList>
 
               <TabsContent value="ad_hoc" className="space-y-4">
+                {/* Month Navigation */}
+                <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border border-border">
+                  <Button variant="outline" size="sm" onClick={goToPreviousMonth}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+
+                  <div className="flex items-center gap-3">
+                    <Calendar className="h-5 w-5 text-primary" />
+                    <div className="text-center">
+                      <h3 className="text-lg font-semibold">
+                        {getMonthName(selectedMonth.month)} {selectedMonth.year}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">{adHocExpenses.length} expense(s)</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" onClick={goToCurrentMonth} className="text-xs">
+                      Today
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={goToNextMonth}>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
                 {/* Ad-hoc expenses list */}
                 <div className="rounded-lg border border-border overflow-hidden">
                   <Table>
@@ -959,10 +996,6 @@ export default function Utilities() {
                     <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
                     <SelectItem value="card">Card</SelectItem>
-                    <SelectItem value="credit_card">Credit Card</SelectItem>
-                    <SelectItem value="debit_card">Debit Card</SelectItem>
-                    <SelectItem value="mobile_wallet">Mobile Wallet</SelectItem>
-                    <SelectItem value="cheque">Cheque</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1097,10 +1130,6 @@ export default function Utilities() {
                       <SelectItem value="cash">Cash</SelectItem>
                       <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
                       <SelectItem value="card">Card</SelectItem>
-                      <SelectItem value="credit_card">Credit Card</SelectItem>
-                      <SelectItem value="debit_card">Debit Card</SelectItem>
-                      <SelectItem value="mobile_wallet">Mobile Wallet</SelectItem>
-                      <SelectItem value="cheque">Cheque</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

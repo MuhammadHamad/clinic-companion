@@ -10,7 +10,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading } = useAuth();
-  const { role, clinicId, isLoading: isTenantLoading, hasLoadedRole, error } = useTenant();
+  const { role, clinicId, isClinicPaused, isLoading: isTenantLoading, hasLoadedRole, error } = useTenant();
   const location = useLocation();
   const { toast } = useToast();
   const didToastRef = useRef(false);
@@ -56,6 +56,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         </div>
       </div>
     );
+  }
+
+  if (role && role !== 'super_admin' && isClinicPaused && location.pathname !== '/clinic-disabled') {
+    return <Navigate to="/clinic-disabled" state={{ from: location }} replace />;
   }
 
   if (!isAuthenticated) {

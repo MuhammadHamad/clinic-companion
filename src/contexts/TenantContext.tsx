@@ -9,6 +9,9 @@ type ClinicRow = {
   id: string;
   name: string;
   slug?: string | null;
+  is_paused?: boolean | null;
+  paused_at?: string | null;
+  pause_reason?: string | null;
 };
 
 type TenantContextValue = {
@@ -16,6 +19,9 @@ type TenantContextValue = {
   clinicId: string | null;
   activeClinicId: string | null;
   activeClinic: ClinicRow | null;
+  isClinicPaused: boolean;
+  clinicPausedAt: string | null;
+  clinicPauseReason: string | null;
   clinics: ClinicRow[];
   isLoading: boolean;
   hasLoadedRole: boolean;
@@ -59,6 +65,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [clinicId, setClinicId] = useState<string | null>(null);
   const [activeClinicId, setActiveClinicIdState] = useState<string | null>(null);
   const [activeClinic, setActiveClinic] = useState<ClinicRow | null>(null);
+  const [isClinicPaused, setIsClinicPaused] = useState(false);
+  const [clinicPausedAt, setClinicPausedAt] = useState<string | null>(null);
+  const [clinicPauseReason, setClinicPauseReason] = useState<string | null>(null);
   const [clinics, setClinics] = useState<ClinicRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadedRole, setHasLoadedRole] = useState(false);
@@ -131,6 +140,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       setClinicId(null);
       setActiveClinicIdState(null);
       setActiveClinic(null);
+      setIsClinicPaused(false);
+      setClinicPausedAt(null);
+      setClinicPauseReason(null);
       setClinics([]);
       setIsLoading(false);
       setHasLoadedRole(false);
@@ -171,6 +183,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       setClinicId(null);
       setActiveClinicIdState(null);
       setActiveClinic(null);
+      setIsClinicPaused(false);
+      setClinicPausedAt(null);
+      setClinicPauseReason(null);
       setClinics([]);
       setIsLoading(false);
       setHasLoadedRole(true);
@@ -213,33 +228,65 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const { data, error } = await supabase
+    const withPauseFields = await supabase
       .from('clinics')
-      .select('id, name, slug')
+      .select('id, name, slug, is_paused, paused_at, pause_reason')
       .order('created_at', { ascending: false });
+
+    let data: any[] | null = withPauseFields.data as any[] | null;
+    let error = withPauseFields.error as any;
+
+    if (error && String(error.message || '').toLowerCase().includes('column')) {
+      const legacy = await supabase
+        .from('clinics')
+        .select('id, name, slug')
+        .order('created_at', { ascending: false });
+
+      data = legacy.data as any[] | null;
+      error = legacy.error as any;
+    }
 
     if (error) {
       setClinics([]);
       return;
     }
 
-    setClinics((data || []) as ClinicRow[]);
+    setClinics(
+      ((data || []) as ClinicRow[]).map((c) => ({
+        ...c,
+        is_paused: c.is_paused ?? false,
+        paused_at: c.paused_at ?? null,
+        pause_reason: c.pause_reason ?? null,
+      })),
+    );
   }, [role]);
 
   const loadActiveClinic = useCallback(async (clinicId?: string | null) => {
     const id = clinicId ?? activeClinicId;
     if (!id) {
       setActiveClinic(null);
+      setIsClinicPaused(false);
+      setClinicPausedAt(null);
+      setClinicPauseReason(null);
       return;
     }
 
     applyCachedClinicName(id);
 
-    const { data, error } = await supabase
+    const withPauseFields = await supabase
       .from('clinics')
-      .select('id, name, slug')
+      .select('id, name, slug, is_paused, paused_at, pause_reason')
       .eq('id', id)
       .single();
+
+    let data: any = withPauseFields.data as any;
+    let error: any = withPauseFields.error as any;
+
+    if (error && String(error.message || '').toLowerCase().includes('column')) {
+      const legacy = await supabase.from('clinics').select('id, name, slug').eq('id', id).single();
+      data = legacy.data as any;
+      error = legacy.error as any;
+    }
 
     if (error) {
       if ((error as unknown as { code?: string }).code === 'PGRST116') {
@@ -257,8 +304,26 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const nextClinic = (data as ClinicRow) || null;
+    const nextClinic =
+      ((data as ClinicRow) && {
+        ...(data as ClinicRow),
+        is_paused: (data as ClinicRow).is_paused ?? false,
+        paused_at: (data as ClinicRow).paused_at ?? null,
+        pause_reason: (data as ClinicRow).pause_reason ?? null,
+      }) || null;
     setActiveClinic(nextClinic);
+
+    if (role && role !== 'super_admin') {
+      const paused = Boolean(nextClinic?.is_paused);
+      setIsClinicPaused(paused);
+      setClinicPausedAt(nextClinic?.paused_at ? String(nextClinic.paused_at) : null);
+      setClinicPauseReason(nextClinic?.pause_reason ? String(nextClinic.pause_reason) : null);
+    } else {
+      setIsClinicPaused(false);
+      setClinicPausedAt(null);
+      setClinicPauseReason(null);
+    }
+
     if (nextClinic?.id && nextClinic?.name) {
       const cache = readClinicNameCache();
       writeClinicNameCache({
@@ -266,7 +331,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         [nextClinic.id]: nextClinic.name,
       });
     }
-  }, [activeClinicId, applyCachedClinicName]);
+  }, [activeClinicId, applyCachedClinicName, role]);
 
   const refresh = useCallback(async () => {
     const resolvedActiveClinicId = await loadRoleAndClinic();
@@ -292,6 +357,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       clinicId,
       activeClinicId,
       activeClinic,
+      isClinicPaused,
+      clinicPausedAt,
+      clinicPauseReason,
       clinics,
       isLoading,
       hasLoadedRole,
@@ -305,6 +373,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       clinicId,
       activeClinicId,
       activeClinic,
+      isClinicPaused,
+      clinicPausedAt,
+      clinicPauseReason,
       clinics,
       isLoading,
       hasLoadedRole,

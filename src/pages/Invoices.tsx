@@ -854,7 +854,6 @@ export default function Invoices() {
                   <SelectItem value="cash">Cash</SelectItem>
                   <SelectItem value="card">Card</SelectItem>
                   <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                  <SelectItem value="cheque">Cheque</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -864,7 +863,7 @@ export default function Invoices() {
               <Input
                 value={paymentData.reference_number}
                 onChange={(e) => setPaymentData({...paymentData, reference_number: e.target.value})}
-                placeholder="Transaction ID, cheque number, etc."
+                placeholder="Transaction ID, etc."
               />
             </div>
 
