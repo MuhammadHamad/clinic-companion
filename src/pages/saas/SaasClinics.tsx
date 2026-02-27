@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Building2, Users, FileText, DollarSign, ArrowRight, Trash2, PauseCircle, PlayCircle } from 'lucide-react';
+import { Building2, Users, FileText, DollarSign, ArrowRight, PauseCircle, PlayCircle } from 'lucide-react';
 import { useToast } from '@/hooks';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
@@ -19,6 +19,7 @@ type ClinicRow = {
   is_paused?: boolean | null;
   paused_at?: string | null;
   pause_reason?: string | null;
+  admin_email?: string | null;
 };
 
 type ClinicStats = {
@@ -58,20 +59,36 @@ export default function SaasClinics() {
 
     const withPauseFields = await supabase
       .from('clinics')
-      .select('id, name, slug, created_at, is_paused, paused_at, pause_reason')
+      .select(`
+        id, name, slug, created_at, is_paused, paused_at, pause_reason,
+        clinic_admin_emails!inner(admin_email)
+      `)
       .order('created_at', { ascending: false });
 
     let data: any[] | null = withPauseFields.data as any[] | null;
     let error = withPauseFields.error as any;
 
     if (error && String(error.message || '').toLowerCase().includes('column')) {
-      const legacy = await supabase
+      const withEmailTable = await supabase
         .from('clinics')
-        .select('id, name, slug, created_at')
+        .select(`
+          id, name, slug, created_at,
+          clinic_admin_emails!inner(admin_email)
+        `)
         .order('created_at', { ascending: false });
 
-      data = legacy.data as any[] | null;
-      error = legacy.error as any;
+      if (!withEmailTable.error) {
+        data = withEmailTable.data as any[] | null;
+        error = withEmailTable.error as any;
+      } else {
+        const legacy = await supabase
+          .from('clinics')
+          .select('id, name, slug, created_at')
+          .order('created_at', { ascending: false });
+
+        data = legacy.data as any[] | null;
+        error = legacy.error as any;
+      }
     }
 
     if (error) {
@@ -83,6 +100,7 @@ export default function SaasClinics() {
         is_paused: c.is_paused ?? false,
         paused_at: c.paused_at ?? null,
         pause_reason: c.pause_reason ?? null,
+        admin_email: (c as any).clinic_admin_emails?.[0]?.admin_email ?? null,
       }));
       setClinics(clinicRows);
       if (clinicRows.length > 0) {
@@ -380,7 +398,7 @@ export default function SaasClinics() {
                           <Building2 className="h-5 w-5 text-primary" />
                           <CardTitle className="text-lg">{clinic.name}</CardTitle>
                         </div>
-                        <p className="text-sm text-muted-foreground">{clinic.slug || '—'}</p>
+                        <p className="text-sm text-muted-foreground">{clinic.admin_email || clinic.slug || '—'}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         {isActive && (
@@ -402,15 +420,7 @@ export default function SaasClinics() {
                         >
                           {clinic.is_paused ? <PlayCircle className="h-4 w-4" /> : <PauseCircle className="h-4 w-4" />}
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                          onClick={(e) => handleDeleteClick(e, clinic)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                                              </div>
                     </div>
                   </CardHeader>
 
@@ -482,6 +492,8 @@ export default function SaasClinics() {
           </div>
         )}
 
+        {/* Delete dialog temporarily hidden from UI */}
+        {/*
         <Dialog
           open={deleteDialogOpen}
           onOpenChange={(open) => {
@@ -505,7 +517,7 @@ export default function SaasClinics() {
               <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
                 <p className="text-sm text-destructive font-medium">⚠️ Warning</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  This will permanently delete all associated data including customers, invoices, appointments, and staff assignments. This action cannot be undone.
+                  This will permanently delete the clinic and all associated data (patients, invoices, payments, appointments, inventory, etc.). This action cannot be undone.
                 </p>
               </div>
             </div>
@@ -520,6 +532,7 @@ export default function SaasClinics() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        */}
 
         <Dialog
           open={pauseDialogOpen}

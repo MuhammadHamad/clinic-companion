@@ -12,6 +12,7 @@ type ClinicRow = {
   is_paused?: boolean | null;
   paused_at?: string | null;
   pause_reason?: string | null;
+  admin_email?: string | null;
 };
 
 type TenantContextValue = {
@@ -230,20 +231,36 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
     const withPauseFields = await supabase
       .from('clinics')
-      .select('id, name, slug, is_paused, paused_at, pause_reason')
+      .select(`
+        id, name, slug, is_paused, paused_at, pause_reason,
+        clinic_admin_emails!inner(admin_email)
+      `)
       .order('created_at', { ascending: false });
 
     let data: any[] | null = withPauseFields.data as any[] | null;
-    let error = withPauseFields.error as any;
+    let error: any = withPauseFields.error as any;
 
     if (error && String(error.message || '').toLowerCase().includes('column')) {
-      const legacy = await supabase
+      const withEmailTable = await supabase
         .from('clinics')
-        .select('id, name, slug')
+        .select(`
+          id, name, slug,
+          clinic_admin_emails!inner(admin_email)
+        `)
         .order('created_at', { ascending: false });
 
-      data = legacy.data as any[] | null;
-      error = legacy.error as any;
+      if (!withEmailTable.error) {
+        data = withEmailTable.data as any[] | null;
+        error = withEmailTable.error as any;
+      } else {
+        const legacy = await supabase
+          .from('clinics')
+          .select('id, name, slug')
+          .order('created_at', { ascending: false });
+
+        data = legacy.data as any[] | null;
+        error = legacy.error as any;
+      }
     }
 
     if (error) {
@@ -257,6 +274,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         is_paused: c.is_paused ?? false,
         paused_at: c.paused_at ?? null,
         pause_reason: c.pause_reason ?? null,
+        admin_email: (c as any).clinic_admin_emails?.[0]?.admin_email ?? null,
       })),
     );
   }, [role]);
@@ -275,7 +293,10 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
     const withPauseFields = await supabase
       .from('clinics')
-      .select('id, name, slug, is_paused, paused_at, pause_reason')
+      .select(`
+        id, name, slug, is_paused, paused_at, pause_reason,
+        clinic_admin_emails!inner(admin_email)
+      `)
       .eq('id', id)
       .single();
 
@@ -283,9 +304,23 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     let error: any = withPauseFields.error as any;
 
     if (error && String(error.message || '').toLowerCase().includes('column')) {
-      const legacy = await supabase.from('clinics').select('id, name, slug').eq('id', id).single();
-      data = legacy.data as any;
-      error = legacy.error as any;
+      const withEmailTable = await supabase
+        .from('clinics')
+        .select(`
+          id, name, slug,
+          clinic_admin_emails!inner(admin_email)
+        `)
+        .eq('id', id)
+        .single();
+
+      if (!withEmailTable.error) {
+        data = withEmailTable.data as any;
+        error = withEmailTable.error as any;
+      } else {
+        const legacy = await supabase.from('clinics').select('id, name, slug').eq('id', id).single();
+        data = legacy.data as any;
+        error = legacy.error as any;
+      }
     }
 
     if (error) {
@@ -310,6 +345,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         is_paused: (data as ClinicRow).is_paused ?? false,
         paused_at: (data as ClinicRow).paused_at ?? null,
         pause_reason: (data as ClinicRow).pause_reason ?? null,
+        admin_email: (data as any).clinic_admin_emails?.[0]?.admin_email ?? null,
       }) || null;
     setActiveClinic(nextClinic);
 
