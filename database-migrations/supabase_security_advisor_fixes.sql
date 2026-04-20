@@ -3,6 +3,15 @@
 -- 1) Enable RLS on flagged tables
 alter table public.visits enable row level security;
 alter table public.invoice_adjustments enable row level security;
+alter table public.clinic_admin_emails enable row level security;
+
+-- clinic_admin_emails: super-admin read-only access
+drop policy if exists "clinic_admin_emails_select_super_admin" on public.clinic_admin_emails;
+create policy "clinic_admin_emails_select_super_admin"
+  on public.clinic_admin_emails
+  for select
+  to authenticated
+  using (public.is_super_admin());
 
 -- visits: admin-only access
 drop policy if exists "visits_admin_only" on public.visits;

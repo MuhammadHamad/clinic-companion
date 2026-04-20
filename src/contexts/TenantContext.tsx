@@ -233,7 +233,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       .from('clinics')
       .select(`
         id, name, slug, is_paused, paused_at, pause_reason,
-        clinic_admin_emails!inner(admin_email)
+        clinic_admin_emails(admin_email)
       `)
       .order('created_at', { ascending: false });
 
@@ -245,7 +245,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         .from('clinics')
         .select(`
           id, name, slug,
-          clinic_admin_emails!inner(admin_email)
+          clinic_admin_emails(admin_email)
         `)
         .order('created_at', { ascending: false });
 
@@ -295,7 +295,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       .from('clinics')
       .select(`
         id, name, slug, is_paused, paused_at, pause_reason,
-        clinic_admin_emails!inner(admin_email)
+        clinic_admin_emails(admin_email)
       `)
       .eq('id', id)
       .single();
@@ -308,7 +308,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         .from('clinics')
         .select(`
           id, name, slug,
-          clinic_admin_emails!inner(admin_email)
+          clinic_admin_emails(admin_email)
         `)
         .eq('id', id)
         .single();
