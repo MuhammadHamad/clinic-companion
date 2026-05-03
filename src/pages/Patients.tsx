@@ -1084,8 +1084,23 @@ export default function Patients() {
     setDuplicatePatientInfo(null);
     setDuplicatePatientWarningForPhone(null);
     setIsSubmitting(true);
-    
-    const result = await createPatientFromForm();
+
+    let result: Awaited<ReturnType<typeof createPatientFromForm>>;
+    try {
+      result = await withTimeout(createPatientFromForm(), 20_000);
+    } catch (err: any) {
+      const message = String(err?.message || err);
+      if (message === 'Request timed out') {
+        toast({
+          title: 'Error',
+          description: 'Create customer request timed out. Please check your internet connection and try again.',
+          variant: 'destructive',
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      throw err;
+    }
     
     if (result.success) {
       toast({
@@ -1108,6 +1123,21 @@ export default function Patients() {
     setDuplicateModalOpen(false);
     setDuplicatePatientInfo(null);
     setDuplicatePatientWarningForPhone(null);
+  };
+
+  const withTimeout = async <T,>(promise: Promise<T>, ms: number): Promise<T> => {
+    let timeoutId: number | null = null;
+    const timeoutPromise = new Promise<T>((_, reject) => {
+      timeoutId = window.setTimeout(() => reject(new Error('Request timed out')), ms);
+    });
+
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId != null) {
+        window.clearTimeout(timeoutId);
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1180,7 +1210,20 @@ export default function Patients() {
       setIsSubmitting(true);
 
       if (formMode === 'create') {
-        await createPatientFromForm();
+        try {
+          await withTimeout(createPatientFromForm(), 20_000);
+        } catch (err: any) {
+          const message = String(err?.message || err);
+          if (message === 'Request timed out') {
+            toast({
+              title: 'Error',
+              description: 'Create customer request timed out. Please check your internet connection and try again.',
+              variant: 'destructive',
+            });
+            return;
+          }
+          throw err;
+        }
       } else {
         const patientIdToUpdate = editingPatientId || selectedPatient?.id;
         if (!patientIdToUpdate) {
