@@ -190,7 +190,7 @@ export function usePatients(options?: { autoFetch?: boolean }) {
     }
 
     try {
-      const { error } = await withTimeout(
+      const { error: insertError } = await withTimeout(
         supabase
           .from('patients')
           .insert({
@@ -212,11 +212,36 @@ export function usePatients(options?: { autoFetch?: boolean }) {
             status: patientData.status || 'active',
             balance: patientData.balance || 0,
           }),
-        20_000,
+        10_000,
       );
 
-      if (error) throw error;
-      return { success: true, data: null };
+      if (insertError) throw insertError;
+
+      let createdPatient: Patient | null = null;
+      try {
+        const { data: createdRow } = await withTimeout(
+          supabase
+            .from('patients')
+            .select('*')
+            .eq('clinic_id', activeClinicId)
+            .eq('phone', patientData.phone)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          5_000,
+        );
+
+        if (createdRow) {
+          createdPatient = mapRowToPatient(createdRow);
+          setPatients((prev) => [createdPatient!, ...prev.filter((p) => p.id !== createdPatient!.id)]);
+          setPagedPatients((prev) => [createdPatient!, ...prev.filter((p) => p.id !== createdPatient!.id)]);
+          setPagedTotalCount((prev) => prev + 1);
+        }
+      } catch (selectError) {
+        logger.warn('Patient created but post-insert fetch failed:', selectError);
+      }
+
+      return { success: true, data: createdPatient };
     } catch (error: any) {
       logger.error('Error creating patient:', error);
       return { success: false, error: String(error?.message || error) };
