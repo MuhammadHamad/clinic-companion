@@ -185,17 +185,11 @@ export function usePatients(options?: { autoFetch?: boolean }) {
   );
 
   const createPatient = async (patientData: Omit<Patient, 'id' | 'patient_number' | 'created_at' | 'registration_date'>) => {
+    if (!activeClinicId) {
+      return { success: false, error: 'No active clinic selected' };
+    }
+
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-
-      if (!activeClinicId) {
-        return { success: false, error: 'No active clinic selected' };
-      }
-
-      if (!sessionData.session?.user?.id) {
-        return { success: false, error: 'Not authenticated' };
-      }
-      
       const { error } = await withTimeout(
         supabase
           .from('patients')
@@ -217,7 +211,6 @@ export function usePatients(options?: { autoFetch?: boolean }) {
             notes: patientData.notes || null,
             status: patientData.status || 'active',
             balance: patientData.balance || 0,
-            created_by: sessionData.session.user.id,
           }),
         20_000,
       );
@@ -232,7 +225,7 @@ export function usePatients(options?: { autoFetch?: boolean }) {
 
   const updatePatient = async (id: string, patientData: Partial<Patient>) => {
     try {
-      const { data, error } = await withTimeout(
+      const { error } = await withTimeout(
         supabase
           .from('patients')
           .update({
@@ -252,14 +245,14 @@ export function usePatients(options?: { autoFetch?: boolean }) {
             notes: patientData.notes || null,
             status: patientData.status,
           })
-          .eq('id', id)
-          .select()
-          .single(),
+          .eq('id', id),
         20_000,
       );
 
       if (error) throw error;
-      const updated = mapRowToPatient(data);
+
+      const existing = pagedPatients.find((p) => p.id === id) || patients.find((p) => p.id === id);
+      const updated: Patient = existing ? { ...existing, ...patientData } : ({ id, ...patientData } as Patient);
 
       setPatients((prev) => prev.map((p) => (p.id === id ? updated : p)));
       setPagedPatients((prev) => prev.map((p) => (p.id === id ? updated : p)));
