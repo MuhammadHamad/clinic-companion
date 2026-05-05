@@ -1085,38 +1085,21 @@ export default function Patients() {
     setDuplicatePatientWarningForPhone(null);
     setIsSubmitting(true);
 
-    let result: Awaited<ReturnType<typeof createPatientFromForm>>;
     try {
-      result = await withTimeout(createPatientFromForm(), 20_000);
+      await withTimeout(createPatientFromForm(), 20_000);
+      // createPatientFromForm handles its own success/error toasts and closes the form
     } catch (err: any) {
       const message = String(err?.message || err);
-      if (message === 'Request timed out') {
-        toast({
-          title: 'Error',
-          description: 'Create customer request timed out. Please check your internet connection and try again.',
-          variant: 'destructive',
-        });
-        setIsSubmitting(false);
-        return;
-      }
-      throw err;
-    }
-    
-    if (result.success) {
-      toast({
-        title: 'Patient Created',
-        description: `${formData.first_name} ${formData.last_name} has been registered successfully`,
-      });
-      setIsFormOpen(false);
-    } else {
       toast({
         title: 'Error',
-        description: result.error || 'Failed to create patient',
+        description: message === 'Request timed out'
+          ? 'Create customer request timed out. Please check your internet connection and try again.'
+          : (err?.message || 'An unexpected error occurred'),
         variant: 'destructive',
       });
+    } finally {
+      setIsSubmitting(false);
     }
-    
-    setIsSubmitting(false);
   };
 
   const handleDuplicateCancel = () => {
@@ -1143,6 +1126,8 @@ export default function Patients() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (isSubmitting) return;
+
     try {
       // Validate form data with Zod
       const validationResult = patientSchema.safeParse(formData);
@@ -1156,17 +1141,22 @@ export default function Patients() {
         return;
       }
 
+      setIsSubmitting(true);
+
       if (formMode === 'create') {
         const normalizedPhone = formData.phone.trim();
         if (normalizedPhone && duplicatePatientWarningForPhone !== normalizedPhone) {
           try {
-            const { data: existing, error } = await supabase
-              .from('patients')
-              .select('*')
-              .eq('phone', normalizedPhone)
-              .neq('status', 'archived')
-              .limit(1)
-              .maybeSingle();
+            const { data: existing, error } = await withTimeout(
+              supabase
+                .from('patients')
+                .select('*')
+                .eq('phone', normalizedPhone)
+                .neq('status', 'archived')
+                .limit(1)
+                .maybeSingle(),
+              10_000,
+            );
 
             if (error) throw error;
             if (existing) {
@@ -1199,15 +1189,20 @@ export default function Patients() {
               setDuplicatePatientWarningForPhone(normalizedPhone);
               setDuplicatePatientInfo(mapped);
               setDuplicateModalOpen(true);
-              return;
+              return;  // finally resets isSubmitting
             }
           } catch (err) {
+            const message = String((err as any)?.message || err);
+            if (message === 'Request timed out') {
+              toast({
+                title: 'Warning',
+                description: 'Duplicate check timed out. Proceeding without duplicate verification.',
+              });
+            }
             logger.error('Error checking duplicate patient phone:', err);
           }
         }
       }
-
-      setIsSubmitting(true);
 
       if (formMode === 'create') {
         try {

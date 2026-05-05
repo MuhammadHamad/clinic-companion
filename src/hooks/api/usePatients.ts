@@ -12,6 +12,18 @@ type PatientsPageParams = {
   statusFilter?: string;
 };
 
+async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timeoutId: number | null = null;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error('Request timed out')), ms);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId != null) window.clearTimeout(timeoutId);
+  }
+}
+
 export function usePatients(options?: { autoFetch?: boolean }) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -179,31 +191,38 @@ export function usePatients(options?: { autoFetch?: boolean }) {
       if (!activeClinicId) {
         return { success: false, error: 'No active clinic selected' };
       }
+
+      if (!sessionData.session?.user?.id) {
+        return { success: false, error: 'Not authenticated' };
+      }
       
-      const { data, error } = await supabase
-        .from('patients')
-        .insert({
-          clinic_id: activeClinicId,
-          first_name: patientData.first_name,
-          last_name: patientData.last_name,
-          phone: patientData.phone,
-          email: patientData.email || null,
-          date_of_birth: patientData.date_of_birth || null,
-          gender: patientData.gender || null,
-          address: patientData.address || null,
-          city: patientData.city || null,
-          emergency_contact_name: patientData.emergency_contact_name || null,
-          emergency_contact_phone: patientData.emergency_contact_phone || null,
-          allergies: patientData.allergies || null,
-          current_medications: patientData.current_medications || null,
-          medical_conditions: patientData.medical_conditions || null,
-          notes: patientData.notes || null,
-          status: patientData.status || 'active',
-          balance: patientData.balance || 0,
-          created_by: sessionData.session?.user?.id,
-        })
-        .select()
-        .single();
+      const { data, error } = await withTimeout(
+        supabase
+          .from('patients')
+          .insert({
+            clinic_id: activeClinicId,
+            first_name: patientData.first_name,
+            last_name: patientData.last_name,
+            phone: patientData.phone,
+            email: patientData.email || null,
+            date_of_birth: patientData.date_of_birth || null,
+            gender: patientData.gender || null,
+            address: patientData.address || null,
+            city: patientData.city || null,
+            emergency_contact_name: patientData.emergency_contact_name || null,
+            emergency_contact_phone: patientData.emergency_contact_phone || null,
+            allergies: patientData.allergies || null,
+            current_medications: patientData.current_medications || null,
+            medical_conditions: patientData.medical_conditions || null,
+            notes: patientData.notes || null,
+            status: patientData.status || 'active',
+            balance: patientData.balance || 0,
+            created_by: sessionData.session.user.id,
+          })
+          .select()
+          .single(),
+        20_000,
+      );
 
       if (error) throw error;
       const mapped = mapRowToPatient(data);
@@ -211,34 +230,37 @@ export function usePatients(options?: { autoFetch?: boolean }) {
       return { success: true, data: mapped };
     } catch (error: any) {
       logger.error('Error creating patient:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: String(error?.message || error) };
     }
   };
 
   const updatePatient = async (id: string, patientData: Partial<Patient>) => {
     try {
-      const { data, error } = await supabase
-        .from('patients')
-        .update({
-          first_name: patientData.first_name,
-          last_name: patientData.last_name,
-          phone: patientData.phone,
-          email: patientData.email || null,
-          date_of_birth: patientData.date_of_birth || null,
-          gender: patientData.gender || null,
-          address: patientData.address || null,
-          city: patientData.city || null,
-          emergency_contact_name: patientData.emergency_contact_name || null,
-          emergency_contact_phone: patientData.emergency_contact_phone || null,
-          allergies: patientData.allergies || null,
-          current_medications: patientData.current_medications || null,
-          medical_conditions: patientData.medical_conditions || null,
-          notes: patientData.notes || null,
-          status: patientData.status,
-        })
-        .eq('id', id)
-        .select()
-        .single();
+      const { data, error } = await withTimeout(
+        supabase
+          .from('patients')
+          .update({
+            first_name: patientData.first_name,
+            last_name: patientData.last_name,
+            phone: patientData.phone,
+            email: patientData.email || null,
+            date_of_birth: patientData.date_of_birth || null,
+            gender: patientData.gender || null,
+            address: patientData.address || null,
+            city: patientData.city || null,
+            emergency_contact_name: patientData.emergency_contact_name || null,
+            emergency_contact_phone: patientData.emergency_contact_phone || null,
+            allergies: patientData.allergies || null,
+            current_medications: patientData.current_medications || null,
+            medical_conditions: patientData.medical_conditions || null,
+            notes: patientData.notes || null,
+            status: patientData.status,
+          })
+          .eq('id', id)
+          .select()
+          .single(),
+        20_000,
+      );
 
       if (error) throw error;
       const updated = mapRowToPatient(data);
