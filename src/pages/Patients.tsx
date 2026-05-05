@@ -1116,12 +1116,29 @@ export default function Patients() {
       if (formMode === 'create') {
         const normalizedPhone = formData.phone.trim();
         if (normalizedPhone && duplicatePatientWarningForPhone !== normalizedPhone) {
-          const existing = await checkDuplicatePhone(normalizedPhone);
-          if (existing) {
+          // Check local state first — instant, no network call
+          const localMatch = pagedPatients.find(
+            (p) => p.phone?.trim() === normalizedPhone && p.status !== 'archived'
+          );
+
+          if (localMatch) {
             setDuplicatePatientWarningForPhone(normalizedPhone);
-            setDuplicatePatientInfo(existing);
+            setDuplicatePatientInfo(localMatch);
             setDuplicateModalOpen(true);
             return;
+          }
+
+          // Not on current page — run a scoped network check
+          try {
+            const existing = await checkDuplicatePhone(normalizedPhone);
+            if (existing) {
+              setDuplicatePatientWarningForPhone(normalizedPhone);
+              setDuplicatePatientInfo(existing);
+              setDuplicateModalOpen(true);
+              return;
+            }
+          } catch {
+            // Network check failed/timed out — proceed without blocking
           }
         }
 

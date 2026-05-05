@@ -348,22 +348,19 @@ export function usePatients(options?: { autoFetch?: boolean }) {
 
   const checkDuplicatePhone = async (phone: string): Promise<Patient | null> => {
     if (!activeClinicId || !phone.trim()) return null;
-    try {
-      const { data } = await withTimeout(
-        supabase
-          .from('patients')
-          .select('*')
-          .eq('clinic_id', activeClinicId)
-          .eq('phone', phone.trim())
-          .neq('status', 'archived')
-          .limit(1)
-          .maybeSingle(),
-        5_000,
-      );
-      return data ? mapRowToPatient(data) : null;
-    } catch {
-      return null;
-    }
+    const { data, error } = await withTimeout(
+      supabase
+        .from('patients')
+        .select('*')
+        .eq('clinic_id', activeClinicId)
+        .eq('phone', phone.trim())
+        .neq('status', 'archived')
+        .limit(1)
+        .maybeSingle(),
+      5_000,
+    );
+    if (error) throw error;
+    return data ? mapRowToPatient(data) : null;
   };
 
   useEffect(() => {
