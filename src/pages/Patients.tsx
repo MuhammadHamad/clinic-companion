@@ -170,7 +170,6 @@ export default function Patients() {
     updatePatient,
     archivePatient,
     restorePatient,
-    checkDuplicatePhone,
   } = usePatients({ autoFetch: false });
   const {
     recordPayment,
@@ -193,7 +192,7 @@ export default function Patients() {
   const [editingPatientId, setEditingPatientId] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [duplicatePatientWarningForPhone, setDuplicatePatientWarningForPhone] = useState<string | null>(null);
+  const [confirmedDuplicatePhone, setConfirmedDuplicatePhone] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Services (Treatment Types) management state
@@ -603,7 +602,9 @@ export default function Patients() {
       medical_conditions: '',
       notes: '',
     });
-    setDuplicatePatientWarningForPhone(null);
+    setConfirmedDuplicatePhone(null);
+    setDuplicatePatientInfo(null);
+    setDuplicateModalOpen(false);
     setIsFormOpen(true);
   };
 
@@ -628,7 +629,7 @@ export default function Patients() {
       notes: patient.notes || '',
     };
     setFormData(newFormData);
-    setDuplicatePatientWarningForPhone(null);
+    setConfirmedDuplicatePhone(null);
     setIsFormOpen(true);
   };
 
@@ -1051,42 +1052,41 @@ export default function Patients() {
     setIsRestoring(false);
   };
 
+  const doCreatePatient = async () => {
+    const result = await createPatient({
+      ...formData,
+      gender: formData.gender as 'male' | 'female' | 'other' | undefined,
+      status: 'active',
+      balance: 0,
+    });
+
+    if (result.success) {
+      setIsFormOpen(false);
+      toast({
+        title: 'Customer Created',
+        description: `${formData.first_name} ${formData.last_name} has been registered successfully`,
+      });
+      fetchPatientsPage({ page: 1, pageSize, searchQuery, statusFilter });
+      refreshPatientsStats();
+      setCurrentPage(1);
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error || 'Failed to create customer',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleDuplicateConfirm = async () => {
     setDuplicateModalOpen(false);
     setDuplicatePatientInfo(null);
-    setDuplicatePatientWarningForPhone(null);
+    setConfirmedDuplicatePhone(null);
     setIsSubmitting(true);
-
     try {
-      const result = await createPatient({
-        ...formData,
-        gender: formData.gender as 'male' | 'female' | 'other' | undefined,
-        status: 'active',
-        balance: 0,
-      });
-
-      if (result.success) {
-        setIsFormOpen(false);
-        toast({
-          title: 'Customer Created',
-          description: `${formData.first_name} ${formData.last_name} has been registered successfully`,
-        });
-        fetchPatientsPage({ page: 1, pageSize, searchQuery, statusFilter });
-        refreshPatientsStats();
-        setCurrentPage(1);
-      } else {
-        toast({
-          title: 'Error',
-          description: result.error || 'Failed to create customer',
-          variant: 'destructive',
-        });
-      }
+      await doCreatePatient();
     } catch (err: any) {
-      toast({
-        title: 'Error',
-        description: err?.message || 'An unexpected error occurred',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: err?.message || 'An unexpected error occurred', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -1095,9 +1095,8 @@ export default function Patients() {
   const handleDuplicateCancel = () => {
     setDuplicateModalOpen(false);
     setDuplicatePatientInfo(null);
-    setDuplicatePatientWarningForPhone(null);
+    setIsFormOpen(true);
   };
-
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1115,56 +1114,22 @@ export default function Patients() {
     try {
       if (formMode === 'create') {
         const normalizedPhone = formData.phone.trim();
-        if (normalizedPhone && duplicatePatientWarningForPhone !== normalizedPhone) {
-          // Check local state first — instant, no network call
-          const localMatch = pagedPatients.find(
+
+        // Local-only duplicate check — instant, no network call
+        if (normalizedPhone && confirmedDuplicatePhone !== normalizedPhone) {
+          const duplicate = pagedPatients.find(
             (p) => p.phone?.trim() === normalizedPhone && p.status !== 'archived'
           );
-
-          if (localMatch) {
-            setDuplicatePatientWarningForPhone(normalizedPhone);
-            setDuplicatePatientInfo(localMatch);
+          if (duplicate) {
+            setIsFormOpen(false);
+            setConfirmedDuplicatePhone(normalizedPhone);
+            setDuplicatePatientInfo(duplicate);
             setDuplicateModalOpen(true);
             return;
           }
-
-          // Not on current page — run a scoped network check
-          try {
-            const existing = await checkDuplicatePhone(normalizedPhone);
-            if (existing) {
-              setDuplicatePatientWarningForPhone(normalizedPhone);
-              setDuplicatePatientInfo(existing);
-              setDuplicateModalOpen(true);
-              return;
-            }
-          } catch {
-            // Network check failed/timed out — proceed without blocking
-          }
         }
 
-        const result = await createPatient({
-          ...formData,
-          gender: formData.gender as 'male' | 'female' | 'other' | undefined,
-          status: 'active',
-          balance: 0,
-        });
-
-        if (result.success) {
-          setIsFormOpen(false);
-          toast({
-            title: 'Customer Created',
-            description: `${formData.first_name} ${formData.last_name} has been registered successfully`,
-          });
-          fetchPatientsPage({ page: 1, pageSize, searchQuery, statusFilter });
-          refreshPatientsStats();
-          setCurrentPage(1);
-        } else {
-          toast({
-            title: 'Error',
-            description: result.error || 'Failed to create customer',
-            variant: 'destructive',
-          });
-        }
+        await doCreatePatient();
       } else {
         const patientIdToUpdate = editingPatientId || selectedPatient?.id;
         if (!patientIdToUpdate) {
@@ -1180,20 +1145,13 @@ export default function Patients() {
         if (result.success) {
           setIsFormOpen(false);
           setEditingPatientId(null);
-          toast({
-            title: 'Customer Updated',
-            description: 'Customer information has been updated successfully',
-          });
+          toast({ title: 'Customer Updated', description: 'Customer information has been updated successfully' });
           if (result.data) {
             setSelectedPatient((prev) => (prev && prev.id === result.data!.id ? result.data! : prev));
           }
           fetchPatientsPage({ page: currentPage, pageSize, searchQuery, statusFilter });
         } else {
-          toast({
-            title: 'Error',
-            description: result.error || 'Failed to update customer',
-            variant: 'destructive',
-          });
+          toast({ title: 'Error', description: result.error || 'Failed to update customer', variant: 'destructive' });
         }
       }
     } catch (err: any) {
@@ -1463,7 +1421,7 @@ export default function Patients() {
         onFormDataChange={setFormData}
         onSubmit={handleSubmit}
         isSubmitting={isSubmitting}
-        duplicateWarning={duplicatePatientWarningForPhone}
+        duplicateWarning={confirmedDuplicatePhone}
         selectedPatient={selectedPatient}
       />
 
