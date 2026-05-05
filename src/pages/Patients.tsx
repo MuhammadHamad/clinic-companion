@@ -73,7 +73,6 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { usePatients, useInvoices, useTreatmentTypes } from '@/hooks';
-import { supabase } from '@/integrations/supabase/client';
 import { Invoice, Patient, Payment, PaymentMethod, InvoiceItem, TreatmentType } from '@/types';
 import { useToast } from '@/hooks';
 import { cn } from '@/lib/utils';
@@ -171,6 +170,7 @@ export default function Patients() {
     updatePatient,
     archivePatient,
     restorePatient,
+    checkDuplicatePhone,
   } = usePatients({ autoFetch: false });
   const {
     recordPayment,
@@ -1098,20 +1098,6 @@ export default function Patients() {
     setDuplicatePatientWarningForPhone(null);
   };
 
-  const withTimeout = async <T,>(promise: Promise<T>, ms: number): Promise<T> => {
-    let timeoutId: number | null = null;
-    const timeoutPromise = new Promise<T>((_, reject) => {
-      timeoutId = window.setTimeout(() => reject(new Error('Request timed out')), ms);
-    });
-
-    try {
-      return await Promise.race([promise, timeoutPromise]);
-    } finally {
-      if (timeoutId != null) {
-        window.clearTimeout(timeoutId);
-      }
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1130,52 +1116,12 @@ export default function Patients() {
       if (formMode === 'create') {
         const normalizedPhone = formData.phone.trim();
         if (normalizedPhone && duplicatePatientWarningForPhone !== normalizedPhone) {
-          try {
-            const { data: existing } = await withTimeout(
-              supabase
-                .from('patients')
-                .select('id, patient_number, first_name, last_name, date_of_birth, gender, phone, email, address, city, emergency_contact_name, emergency_contact_phone, allergies, current_medications, medical_conditions, registration_date, last_visit_date, notes, status, created_at, created_by, balance, archived_at')
-                .eq('phone', normalizedPhone)
-                .neq('status', 'archived')
-                .limit(1)
-                .maybeSingle(),
-              3_000,
-            );
-
-            if (existing) {
-              const mapped = {
-                id: existing.id,
-                patient_number: existing.patient_number,
-                first_name: existing.first_name,
-                last_name: existing.last_name,
-                date_of_birth: existing.date_of_birth || undefined,
-                gender: existing.gender || undefined,
-                phone: existing.phone,
-                email: existing.email || undefined,
-                address: existing.address || undefined,
-                city: existing.city || undefined,
-                emergency_contact_name: existing.emergency_contact_name || undefined,
-                emergency_contact_phone: existing.emergency_contact_phone || undefined,
-                allergies: existing.allergies || undefined,
-                current_medications: existing.current_medications || undefined,
-                medical_conditions: existing.medical_conditions || undefined,
-                registration_date: existing.registration_date,
-                last_visit_date: existing.last_visit_date || undefined,
-                notes: existing.notes || undefined,
-                status: existing.status,
-                created_at: existing.created_at,
-                created_by: existing.created_by || undefined,
-                balance: existing.balance != null ? Number(existing.balance) : undefined,
-                archived_at: existing.archived_at || undefined,
-              } as Patient;
-
-              setDuplicatePatientWarningForPhone(normalizedPhone);
-              setDuplicatePatientInfo(mapped);
-              setDuplicateModalOpen(true);
-              return;
-            }
-          } catch {
-            // timeout or query error — skip duplicate check and proceed
+          const existing = await checkDuplicatePhone(normalizedPhone);
+          if (existing) {
+            setDuplicatePatientWarningForPhone(normalizedPhone);
+            setDuplicatePatientInfo(existing);
+            setDuplicateModalOpen(true);
+            return;
           }
         }
 
