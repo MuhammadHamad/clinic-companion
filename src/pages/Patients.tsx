@@ -1002,8 +1002,8 @@ export default function Patients() {
 
     if (result.success) {
       toast({
-        title: 'Patient Archived',
-        description: 'The patient record has been archived successfully.',
+        title: 'Customer Archived',
+        description: 'The customer record has been archived successfully.',
       });
       fetchPatientsPage({ page: currentPage, pageSize, searchQuery, statusFilter });
       refreshPatientsStats();
@@ -1012,7 +1012,7 @@ export default function Patients() {
     } else {
       toast({
         title: 'Error',
-        description: result.error || 'Failed to archive patient',
+        description: result.error || 'Failed to archive customer',
         variant: 'destructive',
       });
     }
@@ -1033,8 +1033,8 @@ export default function Patients() {
     
     if (result.success) {
       toast({
-        title: 'Patient Restored',
-        description: 'The patient has been restored to active status.',
+        title: 'Customer Restored',
+        description: 'The customer has been restored to active status.',
       });
       fetchPatientsPage({ page: currentPage, pageSize, searchQuery, statusFilter });
       refreshPatientsStats();
@@ -1043,7 +1043,7 @@ export default function Patients() {
     } else {
       toast({
         title: 'Error',
-        description: result.error || 'Failed to restore patient',
+        description: result.error || 'Failed to restore customer',
         variant: 'destructive',
       });
     }
@@ -1061,7 +1061,7 @@ export default function Patients() {
 
     if (result.success) {
       toast({
-        title: 'Patient Created',
+        title: 'Customer Created',
         description: `${formData.first_name} ${formData.last_name} has been registered successfully`,
       });
       fetchPatientsPage({ page: 1, pageSize, searchQuery, statusFilter });
@@ -1071,7 +1071,7 @@ export default function Patients() {
     } else {
       toast({
         title: 'Error',
-        description: result.error || 'Failed to create patient',
+        description: result.error || 'Failed to create customer',
         variant: 'destructive',
       });
     }
@@ -1237,8 +1237,8 @@ export default function Patients() {
 
         if (result.success) {
           toast({
-            title: 'Patient Updated',
-            description: 'Patient information has been updated successfully',
+            title: 'Customer Updated',
+            description: 'Customer information has been updated successfully',
           });
           if (result.data) {
             setSelectedPatient((prev) => (prev && prev.id === result.data!.id ? result.data! : prev));

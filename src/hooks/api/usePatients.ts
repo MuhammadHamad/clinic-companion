@@ -196,7 +196,7 @@ export function usePatients(options?: { autoFetch?: boolean }) {
         return { success: false, error: 'Not authenticated' };
       }
       
-      const { data, error } = await withTimeout(
+      const { error } = await withTimeout(
         supabase
           .from('patients')
           .insert({
@@ -218,16 +218,12 @@ export function usePatients(options?: { autoFetch?: boolean }) {
             status: patientData.status || 'active',
             balance: patientData.balance || 0,
             created_by: sessionData.session.user.id,
-          })
-          .select()
-          .single(),
+          }),
         20_000,
       );
 
       if (error) throw error;
-      const mapped = mapRowToPatient(data);
-      setPatients((prev) => [mapped, ...prev]);
-      return { success: true, data: mapped };
+      return { success: true, data: null };
     } catch (error: any) {
       logger.error('Error creating patient:', error);
       return { success: false, error: String(error?.message || error) };
@@ -296,7 +292,7 @@ export function usePatients(options?: { autoFetch?: boolean }) {
       logger.error('Error archiving patient:', error);
       toast({
         title: 'Error',
-        description: 'Failed to archive patient',
+        description: 'Failed to archive customer',
         variant: 'destructive',
       });
       return { success: false, error: error.message };
@@ -325,7 +321,7 @@ export function usePatients(options?: { autoFetch?: boolean }) {
       logger.error('Error restoring patient:', error);
       toast({
         title: 'Error',
-        description: 'Failed to restore patient',
+        description: 'Failed to restore customer',
         variant: 'destructive',
       });
       return { success: false, error: error.message };
