@@ -1051,34 +1051,6 @@ export default function Patients() {
     setIsRestoring(false);
   };
 
-  const createPatientFromForm = async () => {
-    const result = await createPatient({
-      ...formData,
-      gender: formData.gender as 'male' | 'female' | 'other' | undefined,
-      status: 'active',
-      balance: 0,
-    });
-
-    if (result.success) {
-      toast({
-        title: 'Customer Created',
-        description: `${formData.first_name} ${formData.last_name} has been registered successfully`,
-      });
-      fetchPatientsPage({ page: 1, pageSize, searchQuery, statusFilter });
-      refreshPatientsStats();
-      setCurrentPage(1);
-      setIsFormOpen(false);
-    } else {
-      toast({
-        title: 'Error',
-        description: result.error || 'Failed to create customer',
-        variant: 'destructive',
-      });
-    }
-
-    return result;
-  };
-
   const handleDuplicateConfirm = async () => {
     setDuplicateModalOpen(false);
     setDuplicatePatientInfo(null);
@@ -1086,15 +1058,33 @@ export default function Patients() {
     setIsSubmitting(true);
 
     try {
-      await withTimeout(createPatientFromForm(), 20_000);
-      // createPatientFromForm handles its own success/error toasts and closes the form
+      const result = await createPatient({
+        ...formData,
+        gender: formData.gender as 'male' | 'female' | 'other' | undefined,
+        status: 'active',
+        balance: 0,
+      });
+
+      if (result.success) {
+        setIsFormOpen(false);
+        toast({
+          title: 'Customer Created',
+          description: `${formData.first_name} ${formData.last_name} has been registered successfully`,
+        });
+        fetchPatientsPage({ page: 1, pageSize, searchQuery, statusFilter });
+        refreshPatientsStats();
+        setCurrentPage(1);
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'Failed to create customer',
+          variant: 'destructive',
+        });
+      }
     } catch (err: any) {
-      const message = String(err?.message || err);
       toast({
         title: 'Error',
-        description: message === 'Request timed out'
-          ? 'Create customer request timed out. Please check your internet connection and try again.'
-          : (err?.message || 'An unexpected error occurred'),
+        description: err?.message || 'An unexpected error occurred',
         variant: 'destructive',
       });
     } finally {
@@ -1125,40 +1115,33 @@ export default function Patients() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (isSubmitting) return;
 
+    const validationResult = patientSchema.safeParse(formData);
+    if (!validationResult.success) {
+      const errorMessages = validationResult.error.errors.map(err => err.message).join('. ');
+      toast({ title: 'Validation Error', description: errorMessages, variant: 'destructive' });
+      return;
+    }
+
+    setIsSubmitting(true);
+
     try {
-      // Validate form data with Zod
-      const validationResult = patientSchema.safeParse(formData);
-      if (!validationResult.success) {
-        const errorMessages = validationResult.error.errors.map(err => err.message).join('. ');
-        toast({
-          title: 'Validation Error',
-          description: errorMessages,
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      setIsSubmitting(true);
-
       if (formMode === 'create') {
         const normalizedPhone = formData.phone.trim();
         if (normalizedPhone && duplicatePatientWarningForPhone !== normalizedPhone) {
           try {
-            const { data: existing, error } = await withTimeout(
+            const { data: existing } = await withTimeout(
               supabase
                 .from('patients')
-                .select('*')
+                .select('id, patient_number, first_name, last_name, date_of_birth, gender, phone, email, address, city, emergency_contact_name, emergency_contact_phone, allergies, current_medications, medical_conditions, registration_date, last_visit_date, notes, status, created_at, created_by, balance, archived_at')
                 .eq('phone', normalizedPhone)
                 .neq('status', 'archived')
                 .limit(1)
                 .maybeSingle(),
-              10_000,
+              3_000,
             );
 
-            if (error) throw error;
             if (existing) {
               const mapped = {
                 id: existing.id,
@@ -1189,44 +1172,40 @@ export default function Patients() {
               setDuplicatePatientWarningForPhone(normalizedPhone);
               setDuplicatePatientInfo(mapped);
               setDuplicateModalOpen(true);
-              return;  // finally resets isSubmitting
+              return;
             }
-          } catch (err) {
-            const message = String((err as any)?.message || err);
-            if (message === 'Request timed out') {
-              toast({
-                title: 'Warning',
-                description: 'Duplicate check timed out. Proceeding without duplicate verification.',
-              });
-            }
-            logger.error('Error checking duplicate patient phone:', err);
+          } catch {
+            // timeout or query error — skip duplicate check and proceed
           }
         }
-      }
 
-      if (formMode === 'create') {
-        try {
-          await withTimeout(createPatientFromForm(), 20_000);
-        } catch (err: any) {
-          const message = String(err?.message || err);
-          if (message === 'Request timed out') {
-            toast({
-              title: 'Error',
-              description: 'Create customer request timed out. Please check your internet connection and try again.',
-              variant: 'destructive',
-            });
-            return;
-          }
-          throw err;
+        const result = await createPatient({
+          ...formData,
+          gender: formData.gender as 'male' | 'female' | 'other' | undefined,
+          status: 'active',
+          balance: 0,
+        });
+
+        if (result.success) {
+          setIsFormOpen(false);
+          toast({
+            title: 'Customer Created',
+            description: `${formData.first_name} ${formData.last_name} has been registered successfully`,
+          });
+          fetchPatientsPage({ page: 1, pageSize, searchQuery, statusFilter });
+          refreshPatientsStats();
+          setCurrentPage(1);
+        } else {
+          toast({
+            title: 'Error',
+            description: result.error || 'Failed to create customer',
+            variant: 'destructive',
+          });
         }
       } else {
         const patientIdToUpdate = editingPatientId || selectedPatient?.id;
         if (!patientIdToUpdate) {
-          toast({
-            title: 'Error',
-            description: 'No customer selected to update',
-            variant: 'destructive',
-          });
+          toast({ title: 'Error', description: 'No customer selected to update', variant: 'destructive' });
           return;
         }
 
@@ -1236,6 +1215,8 @@ export default function Patients() {
         });
 
         if (result.success) {
+          setIsFormOpen(false);
+          setEditingPatientId(null);
           toast({
             title: 'Customer Updated',
             description: 'Customer information has been updated successfully',
@@ -1244,23 +1225,17 @@ export default function Patients() {
             setSelectedPatient((prev) => (prev && prev.id === result.data!.id ? result.data! : prev));
           }
           fetchPatientsPage({ page: currentPage, pageSize, searchQuery, statusFilter });
-          setIsFormOpen(false);
-          setEditingPatientId(null);
         } else {
           toast({
             title: 'Error',
-            description: result.error || 'Failed to update patient',
+            description: result.error || 'Failed to update customer',
             variant: 'destructive',
           });
         }
       }
     } catch (err: any) {
       logger.error('Error submitting patient form:', err);
-      toast({
-        title: 'Error',
-        description: err?.message || 'An unexpected error occurred',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: err?.message || 'An unexpected error occurred', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
