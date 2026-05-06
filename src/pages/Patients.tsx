@@ -549,12 +549,25 @@ export default function Patients() {
   const refreshOutstandingTotal = useCallback(async () => {
     if (!activeClinicId) return;
     try {
-      const { data, error } = await supabase
+      const { data: archivedData } = await supabase
+        .from('patients')
+        .select('id')
+        .eq('clinic_id', activeClinicId)
+        .eq('status', 'archived');
+
+      const archivedIds = (archivedData || []).map((p: any) => p.id as string);
+
+      let query = supabase
         .from('invoices')
         .select('balance')
         .eq('clinic_id', activeClinicId)
         .gt('balance', 0);
 
+      if (archivedIds.length > 0) {
+        query = query.not('patient_id', 'in', `(${archivedIds.join(',')})`);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
 
       const sum = (data || []).reduce((acc: number, row: any) => acc + Number(row.balance || 0), 0);
