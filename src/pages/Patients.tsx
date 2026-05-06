@@ -77,6 +77,8 @@ import { Invoice, Patient, Payment, PaymentMethod, InvoiceItem, TreatmentType } 
 import { useToast } from '@/hooks';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger';
+import { supabase } from '@/integrations/supabase/client';
+import { useTenant } from '@/contexts/TenantContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { patientSchema, invoiceSchema, type PatientFormData } from '@/lib/validation';
@@ -181,6 +183,7 @@ export default function Patients() {
   } = useInvoices({ autoFetch: false });
   const { treatmentTypes, createTreatmentType, updateTreatmentType, deleteTreatmentType } = useTreatmentTypes();
   const queryClient = useQueryClient();
+  const { activeClinicId } = useTenant();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState('');
@@ -239,6 +242,7 @@ export default function Patients() {
   });
 
   const refreshPatientsStats = useCallback(async () => {
+    if (!activeClinicId) return;
     try {
       const now = new Date();
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -250,15 +254,18 @@ export default function Patients() {
         supabase
           .from('patients')
           .select('id', { count: 'exact', head: true })
+          .eq('clinic_id', activeClinicId)
           .neq('status', 'archived')
           .neq('status', 'lead'),
         supabase
           .from('patients')
           .select('id', { count: 'exact', head: true })
+          .eq('clinic_id', activeClinicId)
           .eq('status', 'active'),
         supabase
           .from('patients')
           .select('id', { count: 'exact', head: true })
+          .eq('clinic_id', activeClinicId)
           .gte('created_at', startIso)
           .lt('created_at', nextIso)
           .neq('status', 'archived')
@@ -273,7 +280,7 @@ export default function Patients() {
     } catch (e) {
       logger.error('Error fetching patient stats:', e);
     }
-  }, []);
+  }, [activeClinicId]);
 
   const [isInvoiceViewOpen, setIsInvoiceViewOpen] = useState(false);
   const [selectedInvoiceForView, setSelectedInvoiceForView] = useState<Invoice | null>(null);
@@ -540,10 +547,12 @@ export default function Patients() {
   }, [refreshPatientsStats]);
 
   const refreshOutstandingTotal = useCallback(async () => {
+    if (!activeClinicId) return;
     try {
       const { data, error } = await supabase
         .from('patients')
         .select('balance')
+        .eq('clinic_id', activeClinicId)
         .neq('status', 'archived');
 
       if (error) throw error;
@@ -553,7 +562,7 @@ export default function Patients() {
     } catch (e) {
       logger.error('Error fetching outstanding total:', e);
     }
-  }, []);
+  }, [activeClinicId]);
 
   useEffect(() => {
     refreshOutstandingTotal();
