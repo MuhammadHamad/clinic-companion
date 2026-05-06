@@ -551,10 +551,11 @@ export default function Patients() {
     try {
       const { data, error } = await supabase
         .from('invoices')
-        .select('balance, patients!inner(status)')
+        .select('balance')
         .eq('clinic_id', activeClinicId)
         .neq('status', 'paid')
-        .neq('patients.status', 'archived');
+        .neq('status', 'void')
+        .eq('is_void', false);
 
       if (error) throw error;
 
@@ -1021,6 +1022,7 @@ export default function Patients() {
       });
       fetchPatientsPage({ page: currentPage, pageSize, searchQuery, statusFilter });
       refreshPatientsStats();
+      refreshOutstandingTotal();
       setIsDeleteOpen(false);
       setPatientToDelete(null);
     } else {
@@ -1052,6 +1054,7 @@ export default function Patients() {
       });
       fetchPatientsPage({ page: currentPage, pageSize, searchQuery, statusFilter });
       refreshPatientsStats();
+      refreshOutstandingTotal();
       setIsRestoreOpen(false);
       setPatientToRestore(null);
     } else {
