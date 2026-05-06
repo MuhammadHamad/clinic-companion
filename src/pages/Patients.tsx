@@ -550,10 +550,11 @@ export default function Patients() {
     if (!activeClinicId) return;
     try {
       const { data, error } = await supabase
-        .from('patients')
-        .select('balance')
+        .from('invoices')
+        .select('balance, patients!inner(status)')
         .eq('clinic_id', activeClinicId)
-        .neq('status', 'archived');
+        .neq('status', 'paid')
+        .neq('patients.status', 'archived');
 
       if (error) throw error;
 
