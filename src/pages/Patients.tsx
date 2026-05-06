@@ -554,8 +554,7 @@ export default function Patients() {
         .select('balance')
         .eq('clinic_id', activeClinicId)
         .neq('status', 'paid')
-        .neq('status', 'void')
-        .eq('is_void', false);
+        .neq('status', 'void');
 
       if (error) throw error;
 
