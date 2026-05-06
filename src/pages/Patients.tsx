@@ -220,6 +220,7 @@ export default function Patients() {
   const [patientPayments, setPatientPayments] = useState<Payment[]>([]);
   const [isLoadingPayments, setIsLoadingPayments] = useState(false);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [isPaymentSubmitting, setIsPaymentSubmitting] = useState(false);
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<Invoice | null>(null);
   const [paymentData, setPaymentData] = useState({
     amount: 0,
@@ -962,6 +963,7 @@ export default function Patients() {
       return;
     }
 
+    setIsPaymentSubmitting(true);
     const result = await recordPayment(selectedInvoiceForPayment.id, {
       amount: paymentData.amount,
       payment_method: paymentData.payment_method as PaymentMethod,
@@ -988,6 +990,7 @@ export default function Patients() {
         variant: 'destructive',
       });
     }
+    setIsPaymentSubmitting(false);
   };
 
   const openDeleteDialog = (patient: Patient) => {
@@ -2342,11 +2345,12 @@ export default function Patients() {
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsPaymentOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setIsPaymentOpen(false)} disabled={isPaymentSubmitting}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={!selectedInvoiceForPayment}>
-                Save Payment
+              <Button type="submit" disabled={!selectedInvoiceForPayment || isPaymentSubmitting}>
+                {isPaymentSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isPaymentSubmitting ? 'Saving…' : 'Save Payment'}
               </Button>
             </DialogFooter>
           </form>

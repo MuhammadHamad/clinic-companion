@@ -1,3 +1,4 @@
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -124,7 +125,8 @@ export function PaymentDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={!invoice || isSubmitting}>
-              Save Payment
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isSubmitting ? 'Saving…' : 'Save Payment'}
             </Button>
           </DialogFooter>
         </form>

@@ -127,6 +127,7 @@ export function PatientFormDialog({
                 type="date"
                 value={formData.date_of_birth}
                 onChange={(e) => handleChange('date_of_birth', e.target.value)}
+                className="dark:[color-scheme:dark]"
               />
             </div>
             <div>
