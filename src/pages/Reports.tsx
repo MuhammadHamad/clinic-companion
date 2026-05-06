@@ -238,8 +238,14 @@ export default function Reports() {
     fetchPaymentBreakdown();
   }, [activeClinicId, dateRange.end, dateRange.start]);
 
-  // Outstanding Report Data - excluding void invoices
-  const outstandingInvoices = activeInvoices.filter(i => i.status !== 'paid');
+  // Outstanding Report Data - excluding void invoices and archived patients
+  const archivedPatientIds = useMemo(
+    () => new Set(patients.filter((p) => p.status === 'archived').map((p) => p.id)),
+    [patients],
+  );
+  const outstandingInvoices = activeInvoices.filter(
+    (i) => i.status !== 'paid' && !archivedPatientIds.has(i.patient_id),
+  );
   const totalOutstanding = outstandingInvoices.reduce((sum, i) => sum + i.balance, 0);
 
   // Real Aging Analysis based on actual invoice dates

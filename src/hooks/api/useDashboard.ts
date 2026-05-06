@@ -127,12 +127,13 @@ export function useDashboard() {
           .gte('payment_date', startOfYear)
           .lte('payment_date', today),
         
-        // Outstanding invoices
+        // Outstanding invoices (exclude archived patients)
         supabase
           .from('invoices')
-          .select('balance')
+          .select('balance, patients!inner(status)')
           .eq('clinic_id', activeClinicId)
-          .neq('status', 'paid'),
+          .neq('status', 'paid')
+          .neq('patients.status', 'archived'),
         
         // Month's completed appointments
         supabase
